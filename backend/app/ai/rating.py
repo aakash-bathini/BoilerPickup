@@ -140,28 +140,33 @@ def compute_game_performance_rating(
     # We combine normalized PER and efficiency to get a base modifier before match context
     raw_performance = (normalized_per / max(base["scale"], 1.0)) * (1.0 + eff_bonus * 0.5)
     
-    # To severely stretch the curve (1 = Beginner, 10 = NBA Level), we aggressively map the PER standard deviations.
-    # Base CoRec performance yields ~7.0-8.0 for an average player after scaling.
-    curve_center = 7.5
-    steepness = 2.0  # Slightly smoother S-curve for better distribution
+    # 5. Math Mapping -> [0.0, 10.0] scale
+    # We remove the "forcing to center" logic and use a more linear performance interpretor.
+    # An average pickup performance (hitting baselines) is ~7.5 after scaling.
+    # We map 0.0 performance to 0.0 rating and 15.0+ performance to 10.0 rating.
+    perf_rating = (raw_performance / 15.0) * 10.0
     
-    logistic_mapped = 1.0 + 9.0 * (1.0 / (1.0 + math.exp(-(raw_performance - curve_center) / steepness)))
+    # Apply a slight soft-cap on the ends to prevent extreme outliers from breaking the 1-10 range
+    if perf_rating > 9.0:
+        perf_rating = 9.0 + (perf_rating - 9.0) * 0.1 # Diminishing returns after 9.0
+    elif perf_rating < 1.0:
+        perf_rating = 1.0 - (1.0 - perf_rating) * 0.2 # Slower drop at the very bottom
 
     # 6. Apply Match Context (Score Margin & Opponent Strength)
+    # This is the true Elo component: performance relative to competition.
     margin_norm = min(abs(score_margin) / 15.0, 1.0)
     
-    if won:
-        match_context = 1.0 + (0.40 * margin_norm) # Boost winners dynamically
-    else:
-        match_context = 1.0 - (0.40 * margin_norm) # Penalize losers dynamically
+    # Elo scaling: Overperforming against tougher opponents yields higher ratings.
+    # If you play a 9.0 rating team, your performance for that game is weighted higher.
+    match_difficulty = 1.0 + (avg_opponent_rating - 5.0) * 0.05
+    
+    # Winners get a slight performance boost for "clutch factor" / "winning basketball"
+    win_bonus = 1.1 if won else 0.9
+    
+    final_rating = perf_rating * match_difficulty * win_bonus
 
-    # Elo scaling: Reward overperforming against tougher opponents
-    opp_factor = 1.0 + (avg_opponent_rating - 5.0) * 0.04
-
-    final_rating = logistic_mapped * match_context * opp_factor
-
-    # Bound safety guarantees a strict theoretical cap of 1 to 10.
-    return round(max(1.0, min(10.0, final_rating)), 2)
+    # Bound safety guarantees a strict theoretical cap of 0 to 10.
+    return round(max(0.0, min(10.0, final_rating)), 2)
 
 
 def detect_sandbagging(user: User, recent_ratings: list[float]) -> bool:

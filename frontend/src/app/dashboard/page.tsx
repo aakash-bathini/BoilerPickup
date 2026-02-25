@@ -238,7 +238,7 @@ export default function DashboardPage() {
                 return (
                   <motion.div key={g.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="group rounded-2xl bg-zinc-900/60 border border-white/5 hover:border-gold-500/20 transition-all duration-300 overflow-hidden">
                     <div className="flex flex-col sm:flex-row p-5 gap-5 items-start sm:items-center">
-                      <Link href={`/ games / ${g.id} `} className="flex-1 flex items-center gap-5 min-w-0 pointer-events-auto">
+                      <Link href={`/games/${g.id}`} className="flex-1 flex items-center gap-5 min-w-0 pointer-events-auto">
                         <div className="w-14 h-14 rounded-2xl bg-gold-500/10 border border-gold-500/20 flex flex-col items-center justify-center shrink-0 group-hover:bg-gold-500/20 transition-colors">
                           <span className="text-gold-400 font-black text-sm">{g.game_type}</span>
                         </div>
@@ -254,8 +254,8 @@ export default function DashboardPage() {
                         </div>
                       </Link>
 
-                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end shrink-0 pl-19 sm:pl-0 border-t sm:border-0 border-white/5 pt-4 sm:pt-0">
-                        <span className={`px - 3 py - 1 rounded - full text - xs font - bold uppercase tracking - wider ${statusColor(g.status)} bg - opacity - 10 border border - current`}>
+                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end shrink-0 pl-16 sm:pl-0 border-t sm:border-0 border-white/5 pt-4 sm:pt-0">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${statusColor(g.status)} border border-current`}>
                           {g.status.replace('_', ' ')}
                         </span>
 
