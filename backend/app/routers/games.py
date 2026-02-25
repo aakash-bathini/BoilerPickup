@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/games", tags=["games"])
 GAME_TYPE_MAX_PLAYERS = {"5v5": 10, "3v3": 6, "2v2": 4}
 REVIEW_PERIOD_HOURS = 24
 STATS_DEADLINE_HOURS = 24
+UNFILLED_GAME_DELETE_MINUTES = 15  # Delete unfilled games 15 mins before scheduled time
 
 
 def _add_strike(db: Session, user_id: int) -> None:
@@ -32,6 +33,24 @@ def _add_strike(db: Session, user_id: int) -> None:
         from app.routers.moderation import STRIKE_DISABLE_THRESHOLD
         if user.report_count >= STRIKE_DISABLE_THRESHOLD:
             user.is_disabled = True
+
+
+def _cleanup_unfilled_games(db: Session) -> None:
+    """Delete games that could not fill 15 mins before scheduled time. No strike."""
+    cutoff = datetime.now(timezone.utc) + timedelta(minutes=UNFILLED_GAME_DELETE_MINUTES)
+    candidates = (
+        db.query(Game)
+        .filter(
+            Game.scheduled_time <= cutoff,
+            Game.status.in_(["open", "full"]),
+        )
+        .all()
+    )
+    for game in candidates:
+        count = db.query(GameParticipant).filter(GameParticipant.game_id == game.id).count()
+        if count < game.max_players:
+            db.delete(game)
+    db.commit()
 
 
 def _cleanup_games_without_stats(db: Session) -> None:
@@ -74,7 +93,9 @@ def _game_to_out(db: Session, game: Game) -> GameOut:
             from app.ai.matchmaking import get_preview_split
             team_a = [p for p in game.participants if p.team == "A"]
             team_b = [p for p in game.participants if p.team == "B"]
-            if not team_a or not team_b:
+            unassigned = [p for p in game.participants if (p.team or "").lower() not in ("a", "b")]
+            # Use balanced preview split when teams are uneven or anyone is unassigned
+            if not team_a or not team_b or unassigned:
                 team_a, team_b = get_preview_split(game.participants)
             win_prediction = round(predict_win_probability(db, game, team_a, team_b), 2)
         except Exception:
@@ -159,6 +180,7 @@ def list_games(
 ):
     blocked_ids = _get_blocked_ids(db, current_user.id)
 
+    _cleanup_unfilled_games(db)
     _cleanup_games_without_stats(db)
 
     query = (
@@ -187,6 +209,7 @@ def list_games(
 
 @router.get("/{game_id}", response_model=GameOut)
 def get_game(game_id: int, db: Session = Depends(get_db)):
+    _cleanup_unfilled_games(db)
     game = _load_game(db, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -272,11 +295,14 @@ def join_game(
     if current_user.is_disabled:
         raise HTTPException(status_code=403, detail="Your account is disabled")
 
+    _cleanup_unfilled_games(db)
     game = db.query(Game).filter(Game.id == game_id).first()
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     if game.status not in ("open",):
-        raise HTTPException(status_code=400, detail="Game is not accepting players")
+        if game.status in ("in_progress", "completed"):
+            raise HTTPException(status_code=400, detail="Game has started; no more players can join")
+        raise HTTPException(status_code=400, detail="Game is full or not accepting players")
 
     existing = (
         db.query(GameParticipant)
@@ -383,7 +409,12 @@ def start_game(
     if game.status not in ("open", "full"):
         raise HTTPException(status_code=400, detail="Game cannot be started in its current state")
 
-    participants = db.query(GameParticipant).filter(GameParticipant.game_id == game_id).all()
+    participants = (
+        db.query(GameParticipant)
+        .options(joinedload(GameParticipant.user))
+        .filter(GameParticipant.game_id == game_id)
+        .all()
+    )
     if len(participants) < game.max_players:
         raise HTTPException(
             status_code=400,
@@ -394,6 +425,11 @@ def start_game(
         from app.ai.matchmaking import assign_teams
         assign_teams(db, game, participants)
     except Exception:
+        _fallback_team_assignment(participants)
+
+    # Safety: ensure every participant has a team (model can fail for some player IDs)
+    unassigned = [p for p in participants if (p.team or "").lower() not in ("a", "b")]
+    if unassigned:
         _fallback_team_assignment(participants)
 
     game.status = "in_progress"

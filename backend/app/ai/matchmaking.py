@@ -1,5 +1,5 @@
 """
-Team balancing algorithm (grad-level).
+Team balancing algorithm.
 
 When a game roster is full and the creator clicks "Start":
 1. Retrieve all player embeddings for participants
@@ -23,7 +23,7 @@ from app.models import Game, GameParticipant
 
 def assign_teams(db: Session, game: Game, participants: list[GameParticipant]):
     """
-    Assign balanced teams using the AI model when available,
+    Assign balanced teams using the trained model when available,
     falling back to greedy skill-sort.
     """
     try:
@@ -35,7 +35,7 @@ def assign_teams(db: Session, game: Game, participants: list[GameParticipant]):
 
 
 def _assign_with_model(model, game: Game, participants: list[GameParticipant]):
-    """Use the neural model to find the most balanced split."""
+    """Use the trained model to find the most balanced split."""
     n = len(participants)
     team_size = n // 2
     player_ids = [p.user_id for p in participants]
@@ -75,6 +75,10 @@ def _assign_with_model(model, game: Game, participants: list[GameParticipant]):
     for i, p in enumerate(participants):
         p.team = "A" if i in team_a_set else "B"
 
+    # Safety: if any participant was missed, fall back to greedy
+    if any((p.team or "").lower() not in ("a", "b") for p in participants):
+        _greedy_assign(participants)
+
 
 def _greedy_assign(participants: list[GameParticipant]):
     """Greedy skill-sort alternating assignment."""
@@ -98,6 +102,7 @@ def _greedy_assign(participants: list[GameParticipant]):
 def get_preview_split(participants: list[GameParticipant]) -> tuple[list[GameParticipant], list[GameParticipant]]:
     """
     Return (team_a, team_b) for a full roster without persisting.
+    Uses same skill-balancing logic as greedy assignment.
     Used for win predictor when game is full but not yet started.
     """
     sorted_p = sorted(
@@ -106,11 +111,16 @@ def get_preview_split(participants: list[GameParticipant]) -> tuple[list[GamePar
         reverse=True,
     )
     team_a, team_b = [], []
+    team_a_skill = 0.0
+    team_b_skill = 0.0
     for p in sorted_p:
-        if len(team_a) <= len(team_b):
+        skill = p.user.ai_skill_rating if p.user else 5.0
+        if team_a_skill <= team_b_skill:
             team_a.append(p)
+            team_a_skill += skill
         else:
             team_b.append(p)
+            team_b_skill += skill
     return team_a, team_b
 
 

@@ -257,7 +257,7 @@ def evaluate_baselines(players: list[dict], games: list[dict]) -> dict:
             outcome = 0.0 if actual else 1.0
             elo_ratings[pid] = elo_ratings.get(pid, 1500) + K * (outcome - expected)
 
-        # Neural model
+        # Model prediction
         try:
             win_prob = model.predict_win_probability(a_ids, b_ids)
             pred_neural = win_prob > 0.5

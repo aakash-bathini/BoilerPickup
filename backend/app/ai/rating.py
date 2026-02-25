@@ -1,5 +1,5 @@
 """
-Grad-level Skill Rating System — position-aware, all stats, game-type normalized.
+Skill Rating System — position-aware, all stats, game-type normalized.
 
 Pickup basketball: game to 15. 5v5 harder to score than 3v3/2v2.
 - 5v5: ~3 PPG, 2 RPG, 1 APG, 0.5 SPG, 0.3 BPG, 1 TOPG (avg player)
@@ -39,7 +39,7 @@ _DEFAULT_WEIGHTS = {"ppg": 1.0, "rpg": 1.0, "apg": 1.0, "spg": 1.0, "bpg": 1.0, 
 
 def get_learning_rate(total_games_before: int) -> float:
     """
-    Grad-level: K-factor decay. Each new game matters less as history grows.
+    K-factor decay. Each new game matters less as history grows.
     lr = K0 / sqrt(N + 1). Reduced for first few games to avoid overreacting to initial/lying self-report.
     First game: ~25% impact. After 10 games: ~40%. After 25 games: ~8%.
     """
@@ -81,7 +81,7 @@ def compute_game_performance_rating(
     preferred_position: str | None = None,
 ) -> float:
     """
-    Grad-level: position-aware, all stats, game-type normalized.
+    Position-aware, all stats, game-type normalized.
     Uses Hollinger-style efficiency + position-weighted stat contributions.
     """
     base = _GAME_BASELINES.get(game.game_type, _GAME_BASELINES["5v5"])

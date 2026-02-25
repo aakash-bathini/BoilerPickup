@@ -1,5 +1,5 @@
 """
-AI model accuracy tests — demonstrates grad-level AI knowledge.
+Accuracy tests for rating and prediction models.
 
 Covers: 1v1 Elo win predictor, position-aware rating, K-factor decay,
 confidence (Bayesian-inspired), and player matching distance metric.

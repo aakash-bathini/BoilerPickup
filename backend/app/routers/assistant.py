@@ -1,11 +1,9 @@
 """
-Coach Pete — AI assistant for Boiler Pickup.
+Coach Pete — assistant for Boiler Pickup.
 
-Uses Google Gemini (free tier) when GEMINI_API_KEY is set. At inference time,
-the LLM receives full context from the database: user stats, 1v1 history,
-all players, and weather. This context injection (RAG-style) grounds responses
-in real app data — no training required. Falls back to rule-based engine when
-key is not configured.
+Uses external API when configured. Receives full context from the database:
+user stats, 1v1 history, all players, and weather. Falls back to rule-based
+engine when not configured.
 """
 import os
 import httpx
@@ -707,7 +705,7 @@ async def coach_pete_chat(
 
     msg_lower = data.message.lower().strip()
 
-    # Rule-based first for high-value intents — guarantees correct responses (Gemini can return generic greetings)
+    # Rule-based first for high-value intents — guarantees correct responses (external API can return generic greetings)
     rule_handled = [
         "find a match", "find match", "match me", "find me a teammate", "find teammate", "teammate",
         "my stats", "my rating", "my record",
@@ -723,7 +721,7 @@ async def coach_pete_chat(
 
     current_datetime_str = now_est().strftime("%A, %B %d, %Y at %I:%M %p EST")
 
-    # Grad-level: structured prompt with RAG-style grounding, guardrails, and few-shot guidance
+    # Structured prompt with grounding, guardrails, and few-shot guidance
     system_prompt = (
         "# ROLE & SCOPE\n"
         "You are Coach Pete, the AI assistant for Boiler Pickup — a pickup basketball matchmaking app "
@@ -794,7 +792,7 @@ async def coach_pete_chat(
                 [system_prompt, data.message],
                 generation_config=genai.types.GenerationConfig(
                     max_output_tokens=600,
-                    temperature=0.5,  # Lower = more deterministic, less random (grad-level)
+                    temperature=0.5,  # Lower = more deterministic, less random
                     top_p=0.9,
                     top_k=40,
                 ),

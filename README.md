@@ -227,6 +227,16 @@ Tests use in-memory SQLite (no disk I/O). Includes AI accuracy tests: 1v1 Elo, p
 
 ---
 
+### Optional: Git hooks (commit author only)
+
+To ensure commits show only your author (no co-authors):
+
+```bash
+cp githooks/prepare-commit-msg .git/hooks/prepare-commit-msg && chmod +x .git/hooks/prepare-commit-msg
+```
+
+---
+
 ## Troubleshooting
 
 | Issue | Fix |

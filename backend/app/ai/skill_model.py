@@ -1,5 +1,5 @@
 """
-Neural embedding-based skill model for pickup basketball.
+Embedding-based skill model for pickup basketball.
 
 Architecture:
   - Each player has a learnable 16-dim embedding E_i

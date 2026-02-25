@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -270,7 +272,9 @@ def get_skill_history(user_id: int, db: Session = Depends(get_db)):
     for e in entries:
         result.append(SkillHistoryEntry(timestamp=e.timestamp, rating=e.new_rating))
 
-    if not result and user.games_played + user.challenge_wins + user.challenge_losses == 0:
-        result.append(SkillHistoryEntry(timestamp=user.created_at, rating=user.ai_skill_rating))
+    # Always return at least one point so progression chart can render (current rating)
+    if not result:
+        ts = user.created_at if user.created_at else datetime.now(timezone.utc)
+        result.append(SkillHistoryEntry(timestamp=ts, rating=user.ai_skill_rating or 5.0))
 
     return result
