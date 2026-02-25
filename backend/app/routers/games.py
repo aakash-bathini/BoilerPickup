@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
@@ -74,60 +74,51 @@ def _cleanup_games_without_stats(db: Session) -> None:
 
 
 def _game_to_out(db: Session, game: Game) -> GameOut:
-    participants = []
+    """Converts a Game model to a GameOut schema with enriched participant data and AI metrics."""
+    # Enriched participants
+    p_out = []
     for p in game.participants:
-        participants.append(GameParticipantOut(
-            id=p.id,
-            user_id=p.user_id,
-            team=p.team,
-            username=p.user.username if p.user else None,
-            display_name=p.user.display_name if p.user else None,
-            ai_skill_rating=p.user.ai_skill_rating if p.user else None,
-            preferred_position=p.user.preferred_position if p.user else None,
-        ))
+        po = GameParticipantOut.model_validate(p)
+        u = p.user
+        if u:
+            po.username = u.username
+            po.display_name = u.display_name
+            po.ai_skill_rating = u.ai_skill_rating
+            po.preferred_position = u.preferred_position
+        p_out.append(po)
 
-    win_prediction = None
-    # Only show win prediction when roster is full AND everyone is assigned to A or B
-    team_a = [p for p in game.participants if p.team == "A"]
-    team_b = [p for p in game.participants if p.team == "B"]
-    unassigned = [p for p in game.participants if (p.team or "").lower() not in ("a", "b")]
-    if (
-        game.status in ("full", "in_progress")
-        and len(game.participants) >= game.max_players
-        and team_a
-        and team_b
-        and not unassigned
-    ):
+    # 1. Calculate prediction and betting lines
+    from app.ai.win_predictor import predict_win_probability, calculate_betting_lines
+    team_a_parts = [p for p in game.participants if p.team == "A"]
+    team_b_parts = [p for p in game.participants if p.team == "B"]
+    
+    prob = None
+    moneyline = None
+    spread = None
+    
+    # Prediction only valid if roster is full OR game is in progress
+    if (game.status in ("full", "in_progress", "completed") and 
+        len(game.participants) >= game.max_players and 
+        team_a_parts and team_b_parts):
         try:
-            from app.ai.win_predictor import predict_win_probability
-            win_prediction = round(predict_win_probability(db, game, team_a, team_b), 2)
+            prob = predict_win_probability(db, game, team_a_parts, team_b_parts)
+            lines = calculate_betting_lines(prob)
+            moneyline = lines["moneyline"]
+            spread = lines["spread"]
         except Exception:
             pass
-
-    return GameOut(
-        id=game.id,
-        creator_id=game.creator_id,
-        game_type=game.game_type,
-        scheduled_time=game.scheduled_time,
-        skill_min=game.skill_min,
-        skill_max=game.skill_max,
-        status=game.status,
-        court_type=game.court_type,
-        team_a_score=game.team_a_score,
-        team_b_score=game.team_b_score,
-        max_players=game.max_players,
-        notes=game.notes,
-        created_at=game.created_at,
-        participants=participants,
-        creator_name=game.creator.display_name if game.creator else None,
-        scorekeeper_id=game.scorekeeper_id,
-        scorekeeper_status=game.scorekeeper_status,
-        scorekeeper_name=game.scorekeeper.display_name if game.scorekeeper else None,
-        stats_finalized=game.stats_finalized,
-        stats_finalized_at=game.stats_finalized_at,
-        completed_at=game.completed_at,
-        win_prediction=win_prediction,
-    )
+            
+    res = GameOut.model_validate(game)
+    res.participants = p_out
+    res.creator_name = game.creator.display_name if game.creator else "Unknown"
+    if game.scorekeeper:
+        res.scorekeeper_name = game.scorekeeper.display_name
+    
+    res.win_prediction = prob
+    res.win_line_moneyline = moneyline
+    res.win_line_spread = spread
+    
+    return res
 
 
 def _load_game(db: Session, game_id: int) -> Game:
@@ -484,6 +475,7 @@ def _fallback_team_assignment(participants: list[GameParticipant]):
 def complete_game(
     game_id: int,
     data: GameComplete,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -525,6 +517,19 @@ def complete_game(
         pass
 
     db.commit()
+    
+    # Background worker: Self-Healing ML Engine
+    def _trigger_online_train():
+        from app.database import SessionLocal
+        from app.ai.win_predictor import online_train
+        db_bg = SessionLocal()
+        try:
+            online_train(db_bg)
+        finally:
+            db_bg.close()
+            
+    background_tasks.add_task(_trigger_online_train)
+    
     return _game_to_out(db, _load_game(db, game_id))
 
 

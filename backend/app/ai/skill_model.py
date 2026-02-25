@@ -15,7 +15,7 @@ import torch.nn as nn
 import numpy as np
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "model.pt")
-EMBEDDING_DIM = 16
+EMBEDDING_DIM = 32
 STAT_DIM = 12  # 9 stats + 3 game-type one-hot
 
 
@@ -31,8 +31,10 @@ class SkillModel(nn.Module):
         self.win_predictor = nn.Sequential(
             nn.Linear(EMBEDDING_DIM, 64),
             nn.ReLU(),
+            nn.Dropout(0.2), # Prevent overfitting on training set
             nn.Linear(64, 32),
             nn.ReLU(),
+            nn.Dropout(0.2), # Prevent overfitting on training set
             nn.Linear(32, 1),
         )
 

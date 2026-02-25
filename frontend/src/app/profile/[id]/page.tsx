@@ -135,6 +135,22 @@ export default function PublicProfilePage() {
           </div>
         </div>
 
+        {profile.nba_match && (
+          <div className="mt-5 py-3 px-4 rounded-xl bg-gold-500/5 border border-gold-500/20 flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-dark-500 flex items-center justify-center text-xl shadow-inner border border-gold-500/10">🏀</div>
+              <div>
+                <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">AI Playstyle Match</div>
+                <div className="text-sm text-gold-400 font-semibold">Plays like <span className="text-white">{profile.nba_match.name}</span></div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-bold text-white">{profile.nba_match.similarity.toFixed(1)}% Match</div>
+              <div className="text-[10px] text-gray-500 md:text-right text-left">Based on NBA Euclidean Distance</div>
+            </div>
+          </div>
+        )}
+
         {showChallenge && currentUser && (
           <div className="mt-5 bg-dark-300/50 rounded-xl p-5 animate-scale-in border border-gold-500/10">
             <h3 className="text-sm font-semibold text-white mb-3">Schedule 1v1 Challenge</h3>

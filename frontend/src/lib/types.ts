@@ -15,6 +15,7 @@ export interface User {
   challenge_losses: number;
   bio: string | null;
   is_disabled: boolean;
+  nba_match?: { name: string; similarity: number; reason?: string; stats?: any };
   created_at: string;
 }
 
@@ -29,7 +30,15 @@ export interface UserSearchResult {
   losses: number;
   challenge_wins?: number;
   challenge_losses?: number;
+  wins_week: number;
+  losses_week: number;
+  challenge_wins_week: number;
+  challenge_losses_week: number;
   skill_rating_change_week?: number | null;
+  ppg?: number;
+  rpg?: number;
+  apg?: number;
+  nba_match?: { name: string; similarity: number; reason?: string; stats?: any };
 }
 
 export interface GameParticipant {

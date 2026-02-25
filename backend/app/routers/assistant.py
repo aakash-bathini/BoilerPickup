@@ -608,8 +608,8 @@ def _rule_based_reply(message: str, user_context: str, users_summary: str, weath
     # Compare / win probability vs specific player
     if any(w in msg for w in ["compare", "win prob", "win probability", "chance to beat", "how do i stack", "vs ", " versus "]):
         import re
-        from app.ai.win_predictor import predict_1v1_win_probability
-        # Extract name: "compare me to @username", "vs X", "against X" — @ is optional
+        from app.ai.win_predictor import predict_1v1_win_probability, calculate_betting_lines
+        # Extract name
         name = None
         for pat in [r"compare\s+(?:me\s+)?to\s+@?(\w+)", r"vs\s+@?(\w+)", r"versus\s+@?(\w+)", r"against\s+@?(\w+)", r"win\s+prob(?:ability)?\s+(?:vs\s+)?@?(\w+)", r"chance\s+to\s+beat\s+@?(\w+)", r"how\s+do\s+i\s+compare\s+to\s+@?(\w+)"]:
             m = re.search(pat, msg, re.I)
@@ -622,17 +622,22 @@ def _rule_based_reply(message: str, user_context: str, users_summary: str, weath
             ).first()
             if other:
                 my_win = predict_1v1_win_probability(user.ai_skill_rating, other.ai_skill_rating)
-                reply = f"📊 **You vs {other.display_name}**\n\n"
-                reply += f"Based on skill ratings (you: {user.ai_skill_rating:.1f}, them: {other.ai_skill_rating:.1f}):\n\n"
-                reply += f"• **Your win probability**: {(my_win * 100):.0f}%\n"
-                reply += f"• **Their win probability**: {((1 - my_win) * 100):.0f}%\n\n"
+                lines = calculate_betting_lines(my_win)
+                ml = lines["moneyline"]
+                spread = lines["spread"]
+                
+                reply = f"📊 **Matchup Analysis: You vs {other.display_name}**\n\n"
+                reply += f"Vegas estimates this as a **{spread} spread** with you at **{ml} moneyline**.\n\n"
+                reply += f"• **Win Probability**: {(my_win * 100):.0f}%\n"
+                reply += f"• **Rating Delta**: {(user.ai_skill_rating - other.ai_skill_rating):+.1f}\n\n"
+                
                 if my_win >= 0.6:
-                    reply += "You're favored! But anything can happen on the court. 🏀"
+                    reply += f"You're the clear **favorite**! Don't get complacent. 🏀"
                 elif my_win <= 0.4:
-                    reply += "They're favored — but upsets happen. Play your game! 💪"
+                    reply += f"You're the **underdog** (+{spread}), but your 'Hot Week' momentum suggests an upset is possible! 💪"
                 else:
-                    reply += "Pretty even matchup. Could go either way! 🔥"
-                return ChatResponse(reply=reply, data={"compare_target": {"id": other.id, "display_name": other.display_name, "my_win_probability": round(my_win, 2)}})
+                    reply += "This is a **pick 'em** matchup. Every possession counts! 🔥"
+                return ChatResponse(reply=reply, data={"compare_target": {"id": other.id, "display_name": other.display_name, "my_win_probability": round(my_win, 2), "moneyline": ml, "spread": spread}})
         return ChatResponse(reply="Who would you like to compare to? Try: \"Compare me to @username\" or \"Win probability vs John\"")
 
     # "Did I beat X recently?" — use challenge history from user_context
@@ -724,39 +729,31 @@ async def coach_pete_chat(
     # Structured prompt with grounding, guardrails, and few-shot guidance
     system_prompt = (
         "# ROLE & SCOPE\n"
-        "You are Coach Pete, the AI assistant for Boiler Pickup — a pickup basketball matchmaking app "
-        "at Purdue's France A. Córdova Recreational Sports Center (CoRec) in West Lafayette, Indiana.\n\n"
-        "# STRICT GUARDRAILS (enforce these)\n"
-        "- You MUST only answer questions about: (1) Boiler Pickup app features and usage, "
-        "(2) basketball coaching/tips/strategy, (3) the user's stats/games/1v1 history, "
-        "(4) weather for the CoRec, (5) finding teammates by skills.\n"
-        "- If the user asks about unrelated topics (politics, other sports, general knowledge), "
-        "politely redirect: \"I'm here to help with Boiler Pickup and basketball. What can I help you with on the court?\"\n"
-        "- NEVER invent data. Only use information from the CONTEXT below. If you don't have the data, say so.\n\n"
+        "You are Coach Pete, the expert AI assistant for Boiler Pickup at Purdue CoRec.\n"
+        "You are a professional, high-energy basketball strategist with deep knowledge of Purdue hoops.\n\n"
+        "# STRICT GUARDRAILS\n"
+        "- ONLY discuss Boiler Pickup features, basketball strategy, user stats, weather, and matchmaking.\n"
+        "- NEVER hallucinate data. If you don't see it in CONTEXT, say 'I don't have that data yet.'\n"
+        "- Maintain a premium, grad-level tone. No juvenile AI speak.\n\n"
+        "# INTELLIGENCE & MATCHMAKING\n"
+        "- **1v1 Predictions:** When asked 'Can I beat X?' or 'Who should I play?', proactively use win probabilities.\n"
+        "- **Betting Aesthetics:** Use Vegas terminology (Spread, Moneyline, Underdog) to describe matchups.\n"
+        "  - e.g., 'You're a -4.5 favorite against Nikhil.' or 'The spread is tight (+1.5) for this 3v3.'\n"
+        "- **Playstyle Fingerprints:** Reference NBA comparisons (e.g., 'You play like a young Mikal Bridges').\n"
+        "- **Temporal Context:** Prioritize 'Hot Streak' and 'Weekly Wins' over lifetime totals when evaluating momentum.\n\n"
         "# GROUNDING RULES\n"
-        "- For \"did I beat X?\" or \"who won?\": use the 1v1 results in the user profile.\n"
-        "- For \"what games do I have?\" or \"my schedule\": use USER'S TEAM GAMES. Interpret \"this week\" etc. using CURRENT DATE.\n"
-        "- For teammate recommendations: use ALL REGISTERED PLAYERS. Filter by skills mentioned (ppg, rpg, apg, etc.).\n"
-        "- For stats/improvement: use the user's career averages and strengths/weaknesses in the profile.\n"
-        "- All times are in Eastern (EST/EDT). Use CURRENT DATE/TIME for relative queries.\n\n"
-        "# DOMAIN KNOWLEDGE\n"
-        "- 1v1 challenges: games to 15 points, win/loss only (no stats). Both players confirm score.\n"
-        "- Team games: 2v2, 3v3, or 5v5. Stats tracked (PTS, REB, AST, etc.).\n"
-        "- Skill rating: 1–10 scale. Higher = better. Confidence increases with games played.\n\n"
-        "# RESPONSE FORMAT\n"
-        "- Use **bold** for key terms. Be concise. Reference specific numbers when available.\n"
-        "- Personality: friendly coach, Boilermaker fan, basketball terminology.\n\n"
-        "# FEW-SHOT EXAMPLES (follow this style)\n"
-        "User: did I beat Nikhil recently?\n"
-        "Coach: [Check 1v1 results] → \"No — Nikhil won your last 1v1 (12-15). Time for a rematch?\"\n\n"
-        "User: what games do I have this week?\n"
-        "Coach: [Check USER'S TEAM GAMES + CURRENT DATE] → \"You have a 5v5 on Wed Feb 26 at 6:00 PM EST. That's it for this week!\"\n\n"
-        "User: who's good at rebounding?\n"
-        "Coach: [Filter ALL REGISTERED PLAYERS by rpg] → \"Based on stats: [names] with [X]rpg. Visit their profiles to message or challenge.\"\n\n"
-        "User: find me a match / who should I play?\n"
-        "Coach: Suggest the Find Match feature (ML-matched by skill, height, position) or list top similar players from ALL REGISTERED PLAYERS.\n\n"
-        "# CONTEXT (use this data only)\n\n"
-        f"CURRENT DATE AND TIME (Eastern): {current_datetime_str}\n\n"
+        "- Weather: Only for CoRec location. Indoor play is typical, but mentions heat/travel.\n"
+        "- Player Lookup: If asked for 'best player', look at the HIGHEST skill rating in ALL REGISTERED PLAYERS.\n"
+        "- Scheduling: Use 'USER'S TEAM GAMES'. Interpret 'this week' using CURRENT DATE.\n\n"
+        "# FEW-SHOT EXAMPLES\n"
+        "User: Can I beat Nikhil?\n"
+        "Coach: [Check Win Predictor / Ratings] → 'It’s a toss-up! You’re currently a **+2.5 underdog** with a **42% win probability**. Focus on your rebounding to close the gap.'\n\n"
+        "User: Who's on fire right now?\n"
+        "Coach: [Check PLAYERS ON FIRE] → '**[Name]** is cooking with a **+[X]** skill jump this week! Visit the leaderboard to challenge them.'\n\n"
+        "User: How's my game look?\n"
+        "Coach: [Check NBA comparison] → 'Your game is looking sharp—very similar to **[NBA Match]** with that **[Similarity]%** match. Your passing (APG) is at a season high!'\n\n"
+        "# CONTEXT\n"
+        f"CURRENT DATE/TIME: {current_datetime_str}\n\n"
         f"## USER PROFILE\n{user_context}\n\n"
         f"## USER'S TEAM GAMES (upcoming and recent)\n{games_context}\n\n"
         f"## ALL REGISTERED PLAYERS\n{users_summary}\n\n"
@@ -787,7 +784,7 @@ async def coach_pete_chat(
         try:
             import google.generativeai as genai
             genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-1.5-pro")
             response = model.generate_content(
                 [system_prompt, data.message],
                 generation_config=genai.types.GenerationConfig(

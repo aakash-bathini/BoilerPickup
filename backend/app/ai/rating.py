@@ -37,35 +37,45 @@ _POSITION_WEIGHTS = {
 _DEFAULT_WEIGHTS = {"ppg": 1.0, "rpg": 1.0, "apg": 1.0, "spg": 1.0, "bpg": 1.0, "topg": -1.0, "fg_pct": 1.0}
 
 
-def get_learning_rate(total_games_before: int) -> float:
-    """
-    K-factor decay. Each new game matters less as history grows.
-    lr = K0 / sqrt(N + 1). Reduced for first few games to avoid overreacting to initial/lying self-report.
-    First game: ~25% impact. After 10 games: ~40%. After 25 games: ~8%.
-    """
-    K0 = 0.5
-    lr = K0 / math.sqrt(total_games_before + 1)
-    if total_games_before < 3:
-        lr = min(lr, 0.25)  # Cap first few games — don't overreact to one win/loss
-    return lr
-
-
-def get_alpha(total_games_before: int) -> float:
-    """Prior weight from learning rate. alpha = 1 - lr (weight on old rating)."""
-    lr = get_learning_rate(total_games_before)
-    return min(max(1.0 - lr, 0.1), 0.95)
-
-
 def compute_confidence(total_games: int, rating_history: list[float] | None = None) -> float:
-    """Bayesian-inspired confidence. Penalty for high variance."""
-    base = 1.0 - math.exp(-total_games / 6.0)
+    """Glicko-2 inspired Rating Deviation (RD) mapping to confidence."""
+    # Base RD shrinks as games increase (capped asymptotically)
+    rd_base = 350.0 * math.exp(-total_games / 10.0) + 40.0 
+    
+    # Volatility penalty if ratings swing wildly
+    volatility = 0.0
     if rating_history and len(rating_history) >= 3:
         mean_r = sum(rating_history) / len(rating_history)
         variance = sum((r - mean_r) ** 2 for r in rating_history) / len(rating_history)
         std = math.sqrt(variance)
-        consistency_penalty = min(0.3, std * 0.1)
-        base = max(0.05, base - consistency_penalty)
-    return round(base, 4)
+        # Higher std means higher volatility in performance
+        volatility = min(150.0, std * 50.0)
+    
+    # Final RD proxy (typical Glicko scale)
+    rd_proxy = min(350.0, rd_base + volatility)
+    
+    # Confidence is inversely proportional to RD
+    # Glicko RD ranges roughly 30 to 350
+    confidence = 1.0 - (rd_proxy - 30.0) / 320.0
+    return round(max(0.05, min(0.95, confidence)), 4)
+
+
+def get_learning_rate(total_games_before: int, current_confidence: float = 0.5) -> float:
+    """
+    Dynamic learning rate scaling with uncertainty (Glicko-2 inspired).
+    Higher uncertainty (lower confidence) -> Higher learning rate.
+    """
+    K_max = 0.5
+    lr = K_max * (1.0 - current_confidence)
+    if total_games_before < 3:
+        lr = min(lr, 0.25)  # Cap early overreactions
+    return max(0.05, lr)
+
+
+def get_alpha(total_games_before: int, current_confidence: float = 0.5) -> float:
+    """Prior weight from learning rate. alpha = 1 - lr (weight on old rating)."""
+    lr = get_learning_rate(total_games_before, current_confidence)
+    return min(max(1.0 - lr, 0.1), 0.95)
 
 
 def _get_position_weights(pos: str | None) -> dict:
@@ -81,8 +91,9 @@ def compute_game_performance_rating(
     preferred_position: str | None = None,
 ) -> float:
     """
-    Position-aware, all stats, game-type normalized.
-    Uses Hollinger-style efficiency + position-weighted stat contributions.
+    Grad-Level Rating Formula: Implements a custom 'Pickup PER' (Player Efficiency Rating).
+    Synthesizes raw box score data into a single efficiency metric that directly 
+    modulates the Elo k-factor / match scalar.
     """
     base = _GAME_BASELINES.get(game.game_type, _GAME_BASELINES["5v5"])
     weights = _get_position_weights(preferred_position)
@@ -92,60 +103,65 @@ def compute_game_performance_rating(
     fgm, fga = stats.fgm, stats.fga
     three_pm, ftm, fta = stats.three_pm, stats.ftm, stats.fta
 
-    # Normalize each stat by game-type baseline (ratio to average)
-    ppg_ratio = pts / max(base["ppg"], 0.5)
-    rpg_ratio = reb / max(base["rpg"], 0.5)
-    apg_ratio = ast / max(base["apg"], 0.3)
-    spg_ratio = stl / max(base["spg"], 0.2)
-    bpg_ratio = blk / max(base["bpg"], 0.1)
-    topg_ratio = tov / max(base["topg"], 0.5)
-    # Lower TOV is better: invert
-    tov_score = 1.0 / max(topg_ratio, 0.3) if tov > 0 else 1.5
+    # 1. Calculate Pickup PER (Unadjusted)
+    missed_fg = max(fga - fgm, 0)
+    missed_ft = max(fta - ftm, 0)
+    
+    # PER weights for pickup games (different from standard NBA scale due to game formats)
+    per_pts = pts * 1.0
+    per_ast = ast * 1.5
+    per_reb = reb * 1.2
+    per_stl = stl * 2.5
+    per_blk = blk * 2.5
+    per_tov = tov * -2.0
+    per_miss_fg = missed_fg * -1.0
+    per_miss_ft = missed_ft * -0.5
+    
+    raw_per = per_pts + per_ast + per_reb + per_stl + per_blk + per_tov + per_miss_fg + per_miss_ft
 
-    # FG% (Laplace smooth)
-    fg_pct = fgm / (fga + 1) if fga > 0 else 0.5
-    fg_bonus = math.tanh((fg_pct - 0.42) * 8)
+    # 2. Positional Normalization (Apply positional importance weights)
+    # Centers should be highly penalized for bad rebounding; Guards for TOVs
+    w = weights
+    normalized_per = (
+        (per_pts * w["ppg"]) +
+        (per_ast * w["apg"]) +
+        (per_reb * w["rpg"]) +
+        (per_stl * w["spg"]) +
+        (per_blk * w["bpg"]) +
+        (per_tov * abs(w["topg"])) # Negative already
+    )
 
-    # TS% for efficiency
+    # 3. Efficiency Bonus (True Shooting Variant)
     ts_attempts = 2.0 * (fga + 0.44 * fta + 1)
     ts_pct = pts / ts_attempts if ts_attempts > 0 else 0.5
-    eff_bonus = math.tanh((ts_pct - 0.52) * 6)
+    eff_bonus = math.tanh((ts_pct - 0.52) * 6)  # Sigmoid-like scaling centered around 52% true shooting
 
-    # AST:TOV (playmaking)
-    ast_tov = ast / max(tov, 1)
-    ast_bonus = math.tanh((ast_tov - 1.2) * 0.4)
+    # 4. Final Game Raw Performance Variable
+    # We combine normalized PER and efficiency to get a base modifier before match context
+    raw_performance = (normalized_per / max(base["scale"], 1.0)) * (1.0 + eff_bonus * 0.5)
+    
+    # To severely stretch the curve (1 = Beginner, 10 = NBA Level), we aggressively map the PER standard deviations.
+    # Base CoRec performance yields ~7.0-8.0 for an average player after scaling.
+    curve_center = 7.5
+    steepness = 2.0  # Slightly smoother S-curve for better distribution
+    
+    logistic_mapped = 1.0 + 9.0 * (1.0 / (1.0 + math.exp(-(raw_performance - curve_center) / steepness)))
 
-    # Position-weighted stat contribution (normalized)
-    w = weights
-    raw = (
-        w["ppg"] * ppg_ratio * 1.2
-        + w["rpg"] * rpg_ratio * 0.6
-        + w["apg"] * apg_ratio * 0.8
-        + w["spg"] * spg_ratio * 0.5
-        + w["bpg"] * bpg_ratio * 0.4
-        + w["topg"] * tov_score * 0.3
-        + w["fg_pct"] * fg_bonus * 0.5
-    )
-    raw += eff_bonus * 1.0 + ast_bonus * 0.8
-
-    # Scale by game type
-    raw *= base["scale"] / 1.5
-
-    # Score margin
+    # 6. Apply Match Context (Score Margin & Opponent Strength)
     margin_norm = min(abs(score_margin) / 15.0, 1.0)
-    margin_factor = 1.0 + (0.25 if won else -0.25) * margin_norm
-    raw *= margin_factor
+    
+    if won:
+        match_context = 1.0 + (0.40 * margin_norm) # Boost winners dynamically
+    else:
+        match_context = 1.0 - (0.40 * margin_norm) # Penalize losers dynamically
 
-    # Opponent strength
+    # Elo scaling: Reward overperforming against tougher opponents
     opp_factor = 1.0 + (avg_opponent_rating - 5.0) * 0.04
-    raw *= opp_factor
 
-    # Sigmoid to 1-10
-    normalized = 1.0 + 9.0 / (1.0 + math.exp(-(raw - 5.0) / 2.5))
-    win_val = 7.5 if won else 3.5
-    blended = 0.65 * normalized + 0.35 * win_val
+    final_rating = logistic_mapped * match_context * opp_factor
 
-    return round(min(max(blended, 1.0), 10.0), 2)
+    # Bound safety guarantees a strict theoretical cap of 1 to 10.
+    return round(max(1.0, min(10.0, final_rating)), 2)
 
 
 def detect_sandbagging(user: User, recent_ratings: list[float]) -> bool:
@@ -224,7 +240,7 @@ def update_ratings_after_game(
                 game_rating = old_rating - 1.5 * expected_win
             game_rating = min(max(game_rating, 1.0), 10.0)
 
-        alpha = get_alpha(total_before)
+        alpha = get_alpha(total_before, user.skill_confidence)
         perf_history = rating_hist[:5]
         if detect_sandbagging(user, perf_history) and game_rating > old_rating:
             alpha = max(alpha - 0.25, 0.1)

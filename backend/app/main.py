@@ -72,9 +72,9 @@ app.include_router(assistant.router)
 
 @app.post("/api/train-predictor")
 def train_win_predictor(db: Session = Depends(get_db)):
-    """Train the win predictor on completed games. Needs 20+ games."""
-    from app.ai.win_predictor import train_on_games
-    return train_on_games(db, min_games=20)
+    """Dynamically Train the win predictor on NBA + App completed games."""
+    from app.ai.win_predictor import online_train
+    return online_train(db)
 
 
 @app.get("/api/train-predictor")

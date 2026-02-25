@@ -58,7 +58,7 @@ export default function LeaderboardPage() {
 
   const skillList = activeTab === 'overall' ? playersWithGames
     : activeTab === 'hot_week' ? hotWeek
-    : (byPosition[activeTab] || []);
+      : (byPosition[activeTab] || []);
 
   const h2hList = activeTab === 'h2h_week' ? h2hWeek : h2hTotal;
   const is1v1Section = activeSection === '1v1';
@@ -126,21 +126,19 @@ export default function LeaderboardPage() {
             <div className="flex gap-3 mb-6 animate-slide-up">
               <button
                 onClick={() => { setActiveSection('skill'); setActiveTab('overall'); }}
-                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${
-                  activeSection === 'skill'
-                    ? 'bg-gold-500/25 text-gold-400 border-2 border-gold-500/50'
-                    : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-gold-500/20 hover:text-gray-300'
-                }`}
+                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${activeSection === 'skill'
+                  ? 'bg-gold-500/25 text-gold-400 border-2 border-gold-500/50'
+                  : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-gold-500/20 hover:text-gray-300'
+                  }`}
               >
                 🏆 Skill Rankings
               </button>
               <button
                 onClick={() => { setActiveSection('1v1'); setActiveTab('h2h_total'); }}
-                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${
-                  activeSection === '1v1'
-                    ? 'bg-orange-500/25 text-orange-400 border-2 border-orange-500/50'
-                    : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-orange-500/20 hover:text-gray-300'
-                }`}
+                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${activeSection === '1v1'
+                  ? 'bg-orange-500/25 text-orange-400 border-2 border-orange-500/50'
+                  : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-orange-500/20 hover:text-gray-300'
+                  }`}
               >
                 ⚡ 1v1 Head-to-Head
               </button>
@@ -151,30 +149,25 @@ export default function LeaderboardPage() {
               {activeSection === 'skill' ? (
                 <>
                   <button onClick={() => setActiveTab('overall')}
-                    className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                      activeTab === 'overall' ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-gold-500/20 hover:text-gray-300'
-                    }`}>Best Overall</button>
+                    className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${activeTab === 'overall' ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-gold-500/20 hover:text-gray-300'
+                      }`}>Best Overall</button>
                   <button onClick={() => setActiveTab('hot_week')}
-                    className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                      activeTab === 'hot_week' ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-gold-500/20 hover:text-gray-300'
-                    }`}>🔥 Players on Fire</button>
+                    className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${activeTab === 'hot_week' ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-gold-500/20 hover:text-gray-300'
+                      }`}>🔥 Players on Fire</button>
                   {POSITIONS.map(pos => (
                     <button key={pos} onClick={() => setActiveTab(pos)}
-                      className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                        activeTab === pos ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-gold-500/20 hover:text-gray-300'
-                      }`}>{positionLabel(pos)}</button>
+                      className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${activeTab === pos ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-gold-500/20 hover:text-gray-300'
+                        }`}>{positionLabel(pos)}</button>
                   ))}
                 </>
               ) : (
                 <>
                   <button onClick={() => setActiveTab('h2h_total')}
-                    className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                      activeTab === 'h2h_total' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-orange-500/20 hover:text-gray-300'
-                    }`}>Most 1v1 Wins (All Time)</button>
+                    className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${activeTab === 'h2h_total' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-orange-500/20 hover:text-gray-300'
+                      }`}>Most 1v1 Wins (All Time)</button>
                   <button onClick={() => setActiveTab('h2h_week')}
-                    className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                      activeTab === 'h2h_week' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-orange-500/20 hover:text-gray-300'
-                    }`}>🔥 1v1 Wins (Last 7 Days)</button>
+                    className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${activeTab === 'h2h_week' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40' : 'bg-dark-300/50 text-gray-400 border border-transparent hover:border-orange-500/20 hover:text-gray-300'
+                      }`}>🔥 1v1 Wins (Last 7 Days)</button>
                 </>
               )}
             </div>
@@ -186,19 +179,18 @@ export default function LeaderboardPage() {
                   <thead>
                     <tr className={`text-xs text-gray-500 uppercase tracking-wider border-b ${is1v1Section ? 'border-orange-500/10' : 'border-gold-500/10'} bg-dark-300/30`}>
                       <th className="text-left py-4 px-4">#</th>
-                      <th className="text-left py-4 px-4">Player</th>
+                      <th className="text-left py-4 px-4 w-[250px]">Player</th>
                       <th className="text-center py-4 px-4">Rating</th>
-                      <th className="text-center py-4 px-4 hidden sm:table-cell">Position</th>
+                      <th className="text-left py-4 px-4 hidden md:table-cell">NBA Playstyle Match</th>
                       {is1v1Section ? (
                         <>
-                          <th className="text-center py-4 px-4">1v1 Wins</th>
-                          <th className="text-center py-4 px-4">1v1 (W–L)</th>
+                          <th className="text-center py-4 px-4">1v1 Record</th>
+                          <th className="text-center py-4 px-4 hidden sm:table-cell">Win Rate</th>
                         </>
                       ) : (
                         <>
-                          <th className="text-center py-4 px-4">1v1 (W–L)</th>
-                          <th className="text-center py-4 px-4 hidden sm:table-cell">Team (W–L)</th>
-                          <th className="text-center py-4 px-4 hidden sm:table-cell">Games</th>
+                          <th className="text-center py-4 px-4 hidden sm:table-cell">PPG / RPG / APG</th>
+                          <th className="text-center py-4 px-4">Total Record</th>
                           {activeTab === 'hot_week' && <th className="text-center py-4 px-4">+7d</th>}
                         </>
                       )}
@@ -228,28 +220,54 @@ export default function LeaderboardPage() {
                             {p.ai_skill_rating.toFixed(1)}
                           </span>
                         </td>
-                        <td className="py-4 px-4 text-center hidden sm:table-cell">
-                          <span className="text-xs text-gray-400">{p.preferred_position || '—'}</span>
+                        <td className="py-4 px-4 text-left hidden md:table-cell">
+                          {p.nba_match ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">🏀</span>
+                              <div>
+                                <div className="text-[11px] font-semibold text-white truncate max-w-[120px]">{p.nba_match.name}</div>
+                                <div className="text-[10px] text-gold-400">{p.nba_match.similarity.toFixed(1)}% Match</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-500">—</span>
+                          )}
                         </td>
                         {is1v1Section ? (
                           <>
                             <td className="py-4 px-4 text-center">
-                              <span className="text-lg font-bold text-orange-400">{(p.challenge_wins || 0)}</span>
+                              <span className="text-base font-bold text-orange-400">
+                                {(() => {
+                                  const w = activeTab === 'h2h_week' ? (p.challenge_wins_week || 0) : (p.challenge_wins || 0);
+                                  const l = activeTab === 'h2h_week' ? (p.challenge_losses_week || 0) : (p.challenge_losses || 0);
+                                  return `${w}W-${l}L`;
+                                })()}
+                              </span>
                             </td>
-                            <td className="py-4 px-4 text-center">
-                              <span className="text-sm text-gray-300">{(p.challenge_wins || 0)}W-{(p.challenge_losses || 0)}L</span>
-                            </td>
+                            <td className="py-4 px-4 text-center hidden sm:table-cell">
+                              <span className="text-sm text-gray-400">
+                                {(() => {
+                                  const w = activeTab === 'h2h_week' ? (p.challenge_wins_week || 0) : (p.challenge_wins || 0);
+                                  const l = activeTab === 'h2h_week' ? (p.challenge_losses_week || 0) : (p.challenge_losses || 0);
+                                  const total = w + l;
+                                  return total > 0 ? ((w / total) * 100).toFixed(0) + '%' : '0%';
+                                })()}
+                              </span></td>
                           </>
                         ) : (
                           <>
+                            <td className="py-4 px-4 text-center hidden sm:table-cell">
+                              <div className="text-sm font-semibold text-emerald-400">{p.ppg?.toFixed(1) || '0.0'} <span className="text-[10px] uppercase font-bold text-gray-500 ml-0.5">PTS</span></div>
+                              <div className="text-[11px] font-semibold text-blue-400">{p.rpg?.toFixed(1) || '0.0'} <span className="text-[9px] uppercase font-bold text-gray-500 ml-0.5">REB</span> | {p.apg?.toFixed(1) || '0.0'} <span className="text-[9px] uppercase font-bold text-gray-500 ml-0.5">AST</span></div>
+                            </td>
                             <td className="py-4 px-4 text-center">
-                              <span className="text-sm font-medium text-orange-400/90">{(p.challenge_wins || 0)}W-{(p.challenge_losses || 0)}L</span>
-                            </td>
-                            <td className="py-4 px-4 text-center hidden sm:table-cell">
-                              <span className="text-sm text-gray-500">{(p.wins || 0)}W-{(p.losses || 0)}L</span>
-                            </td>
-                            <td className="py-4 px-4 text-center hidden sm:table-cell">
-                              <span className="text-sm text-gray-400">{p.games_played}</span>
+                              <span className="text-sm font-bold text-white">
+                                {(() => {
+                                  const tw = activeTab === 'hot_week' ? (p.wins_week || 0) + (p.challenge_wins_week || 0) : ((p.wins || 0) + (p.challenge_wins || 0));
+                                  const tl = activeTab === 'hot_week' ? (p.losses_week || 0) + (p.challenge_losses_week || 0) : ((p.losses || 0) + (p.challenge_losses || 0));
+                                  return `${tw}W-${tl}L`;
+                                })()}
+                              </span>
                             </td>
                             {activeTab === 'hot_week' && (
                               <td className="py-4 px-4 text-center">

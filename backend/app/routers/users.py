@@ -242,6 +242,104 @@ def _user_ids_with_min_stats(db: Session, min_ppg=None, min_rpg=None, min_apg=No
     return [r[0] for r in q.all()]
 
 
+
+def _enrich_user_search(db, u, extra_kwargs=None):
+    from app.ai.player_match import _get_career_stats
+    from app.ai.nba_comparison import get_nba_comparison
+    from app.schemas import UserSearchResult
+    from app.models import GameParticipant, Game, Challenge
+    from datetime import datetime, timezone, timedelta
+    
+    if extra_kwargs is None:
+        extra_kwargs = {}
+        
+    stats = _get_career_stats(db, u.id)
+    ppg = stats.get('ppg', 0.0)
+    rpg = stats.get('rpg', 0.0)
+    apg = stats.get('apg', 0.0)
+    
+    user_stats = {
+        'pts': ppg,
+        'reb': rpg,
+        'ast': apg,
+        'stl': stats.get('spg', 0.0),
+        'blk': stats.get('bpg', 0.0)
+    }
+    
+    # Pass physicals for accurate matching
+    user_physicals = {
+        'height_inches': 0.0,
+        'weight_lbs': u.weight or 0.0
+    }
+    if u.height:
+        try:
+            ft, inches = map(int, u.height.split("'"))
+            user_physicals['height_inches'] = (ft * 12) + inches
+        except:
+            pass
+            
+    match = get_nba_comparison(user_stats, user_physicals, u.preferred_position) if sum(user_stats.values()) > 0 else None
+    
+    # Calculate Weekly Stats (last 7 days wins)
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    
+    # Team wins/losses this week
+    from sqlalchemy import and_, or_
+    
+    wins_week = (
+        db.query(GameParticipant)
+        .join(Game, GameParticipant.game_id == Game.id)
+        .filter(
+            GameParticipant.user_id == u.id,
+            Game.status == "completed",
+            Game.completed_at >= week_ago,
+            or_(
+                and_(GameParticipant.team == 'A', Game.team_a_score > Game.team_b_score),
+                and_(GameParticipant.team == 'B', Game.team_b_score > Game.team_a_score)
+            )
+        )
+        .count()
+    )
+    losses_week = (
+        db.query(GameParticipant)
+        .join(Game, GameParticipant.game_id == Game.id)
+        .filter(
+            GameParticipant.user_id == u.id,
+            Game.status == "completed",
+            Game.completed_at >= week_ago,
+            or_(
+                and_(GameParticipant.team == 'A', Game.team_a_score < Game.team_b_score),
+                and_(GameParticipant.team == 'B', Game.team_b_score < Game.team_a_score)
+            )
+        )
+        .count()
+    )
+    
+    # Challenge wins this week
+    c_wins_week = (
+        db.query(Challenge)
+        .filter(Challenge.winner_id == u.id, Challenge.status == "completed", Challenge.completed_at >= week_ago)
+        .count()
+    )
+    c_losses_week = (
+        db.query(Challenge)
+        .filter((Challenge.challenger_id == u.id) | (Challenge.challenged_id == u.id))
+        .filter(Challenge.winner_id != u.id, Challenge.winner_id.isnot(None), Challenge.status == "completed", Challenge.completed_at >= week_ago)
+        .count()
+    )
+    
+    kwargs = {
+        'id': u.id, 'username': u.username, 'display_name': u.display_name,
+        'ai_skill_rating': u.ai_skill_rating, 'preferred_position': u.preferred_position,
+        'games_played': u.games_played or 0, 'wins': u.wins or 0, 'losses': u.losses or 0,
+        'challenge_wins': u.challenge_wins or 0, 'challenge_losses': u.challenge_losses or 0,
+        'wins_week': wins_week, 'losses_week': losses_week,
+        'challenge_wins_week': c_wins_week, 'challenge_losses_week': c_losses_week,
+        'ppg': round(ppg, 1), 'rpg': round(rpg, 1), 'apg': round(apg, 1), 'nba_match': match
+    }
+    kwargs.update(extra_kwargs)
+    return UserSearchResult(**kwargs)
+
 @router.get("/users/search", response_model=list[UserSearchResult])
 def search_users(
     q: str = Query(None, min_length=0),
@@ -296,7 +394,7 @@ def search_users(
         query = query.order_by(User.ai_skill_rating.desc())
 
     results = query.limit(30).all()
-    return results
+    return [_enrich_user_search(db, u) for u in results]
 
 
 @router.get("/users/match", response_model=list[UserSearchResult])
@@ -355,15 +453,7 @@ def leaderboard_1v1(
         )
         results = query.all()
 
-    out = []
-    for u in results:
-        out.append(UserSearchResult(
-            id=u.id, username=u.username, display_name=u.display_name,
-            ai_skill_rating=u.ai_skill_rating, preferred_position=u.preferred_position,
-            games_played=u.games_played or 0, wins=u.wins or 0, losses=u.losses or 0,
-            challenge_wins=u.challenge_wins or 0, challenge_losses=u.challenge_losses or 0,
-        ))
-    return out
+    return [_enrich_user_search(db, u) for u in results]
 
 
 @router.get("/users/leaderboard", response_model=list[UserSearchResult])
@@ -406,13 +496,7 @@ def leaderboard(
             total_games = (u.games_played or 0) + (u.challenge_wins or 0) + (u.challenge_losses or 0)
             if total_games < 1:
                 continue
-            out.append(UserSearchResult(
-                id=u.id, username=u.username, display_name=u.display_name,
-                ai_skill_rating=u.ai_skill_rating, preferred_position=u.preferred_position,
-                games_played=u.games_played or 0, wins=u.wins or 0, losses=u.losses or 0,
-                challenge_wins=u.challenge_wins or 0, challenge_losses=u.challenge_losses or 0,
-                skill_rating_change_week=round(float(gain_val), 2),
-            ))
+            out.append(_enrich_user_search(db, u, {'skill_rating_change_week': round(float(gain_val), 2)}))
         return out
 
     # Only rank users who have played at least 1 game (team or 1v1)
@@ -425,15 +509,7 @@ def leaderboard(
     if position:
         query = query.filter(User.preferred_position == position)
     results = query.order_by(User.ai_skill_rating.desc()).limit(limit).all()
-    out = []
-    for u in results:
-        out.append(UserSearchResult(
-            id=u.id, username=u.username, display_name=u.display_name,
-            ai_skill_rating=u.ai_skill_rating, preferred_position=u.preferred_position,
-            games_played=u.games_played or 0, wins=u.wins or 0, losses=u.losses or 0,
-            challenge_wins=u.challenge_wins or 0, challenge_losses=u.challenge_losses or 0,
-        ))
-    return out
+    return [_enrich_user_search(db, u) for u in results]
 
 
 @router.get("/users/compare/{user_id}")
@@ -509,7 +585,26 @@ def get_user(
     user_id: int,
     db: Session = Depends(get_db),
 ):
+    from sqlalchemy import func
+    from app.ai.nba_comparison import get_nba_comparison
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+        
+    # Inject NBA Playstyle match dynamically
+    stats = db.query(
+        func.avg(PlayerGameStats.pts).label("pts"),
+        func.avg(PlayerGameStats.reb).label("reb"),
+        func.avg(PlayerGameStats.ast).label("ast"),
+        func.avg(PlayerGameStats.stl).label("stl"),
+        func.avg(PlayerGameStats.blk).label("blk"),
+    ).filter(PlayerGameStats.user_id == user_id).first()
+    
+    user_stats = {}
+    if stats and stats.pts is not None:
+        user_stats = {"pts": stats.pts, "reb": stats.reb, "ast": stats.ast, "stl": stats.stl, "blk": stats.blk}
+        
+    setattr(user, "nba_match", get_nba_comparison(user_stats))
+    
     return user

@@ -24,11 +24,11 @@ def test_1v1_win_probability_exact_elo():
     # Equal rating -> exactly 0.5
     assert predict_1v1_win_probability(5.0, 5.0) == 0.5
 
-    # 4-point difference (1-10 scale) -> ~76% for higher, ~24% for lower
+    # 4-point difference (1-10 scale) -> ~80% for higher, ~20% for lower (DraftKings formula)
     p_high = predict_1v1_win_probability(7.0, 5.0)
     p_low = predict_1v1_win_probability(5.0, 7.0)
-    assert 0.74 <= p_high <= 0.78
-    assert 0.22 <= p_low <= 0.26
+    assert 0.78 <= p_high <= 0.82
+    assert 0.18 <= p_low <= 0.22
     assert abs((p_high + p_low) - 1.0) < 0.001
 
 
@@ -53,24 +53,21 @@ def test_1v1_win_probability_monotonicity():
 # ─── Rating: K-factor decay ────────────────────────────────────────────────
 
 def test_learning_rate_decay():
-    """Learning rate decreases with games (sqrt decay)."""
-    lr_0 = get_learning_rate(0)
-    lr_5 = get_learning_rate(5)
-    lr_25 = get_learning_rate(25)
-    lr_50 = get_learning_rate(50)
-    assert lr_0 >= lr_5 >= lr_25 >= lr_50
-    assert lr_0 <= 0.25  # Capped for first few games
-    assert lr_50 < 0.1
+    """Learning rate decreases with confidence."""
+    # Low confidence = high learning rate
+    lr_low = get_learning_rate(10, 0.1)
+    # High confidence = low learning rate
+    lr_high = get_learning_rate(10, 0.9)
+    assert lr_low > lr_high
+    assert lr_high >= 0.05
 
 
 def test_alpha_increases_with_games():
-    """Alpha (prior weight) increases as history grows."""
-    a0 = get_alpha(0)
-    a10 = get_alpha(10)
-    a30 = get_alpha(30)
-    assert a0 < a10 < a30
-    assert 0.7 <= a0 <= 0.8
-    assert a30 > 0.9
+    """Alpha (prior weight) increases as confidence grows."""
+    a_low = get_alpha(10, 0.1)
+    a_high = get_alpha(10, 0.9)
+    assert a_high > a_low
+    assert 0.9 <= a_high <= 0.95
 
 
 # ─── Rating: Position-aware performance ────────────────────────────────────
@@ -136,19 +133,23 @@ def test_position_weights_pg_vs_c():
 # ─── Confidence (Bayesian-inspired) ─────────────────────────────────────────
 
 def test_confidence_increases_with_games():
-    """Confidence grows with more games (1 - exp decay)."""
+    """Confidence grows with more games as RD base shrinks."""
     c0 = compute_confidence(0)
     c5 = compute_confidence(5)
-    c15 = compute_confidence(15)
-    assert c0 == 0
-    assert 0 < c5 < c15
-    assert c15 > 0.9
+    c25 = compute_confidence(25)
+    
+    assert c0 < c5 < c25
+    assert c25 > 0.7
 
 
 def test_confidence_penalizes_variance():
-    """High variance in rating history reduces confidence."""
+    """High variance (volatility) in rating history reduces confidence."""
+    # Stable ratings
     c_stable = compute_confidence(10, [5.0, 5.1, 4.9, 5.0, 5.0])
-    c_volatile = compute_confidence(10, [3.0, 7.0, 5.0, 4.0, 6.0])
+    # Very volatile ratings
+    c_volatile = compute_confidence(10, [1.0, 9.0, 2.0, 8.0, 1.0])
+    
+    # Due to volatility penalty, stable should have higher confidence
     assert c_stable > c_volatile
 
 

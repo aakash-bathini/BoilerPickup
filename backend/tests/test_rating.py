@@ -11,16 +11,16 @@ from app.ai.player_match import find_matches, find_complementary_teammates, _get
 
 
 def test_get_alpha():
-    """K-factor decay: first game capped to avoid overreaction; more games = more stable."""
-    assert 0.7 <= get_alpha(0) <= 0.8  # First game: ~25% impact (lr capped), ~75% prior
-    assert get_alpha(10) > 0.8  # After 10 games: mostly prior
-    assert get_alpha(30) > 0.9  # After 30 games: very stable
-    assert get_learning_rate(0) > get_learning_rate(50)  # Decay with games
+    """K-factor decay: depends on confidence and games played."""
+    assert 0.7 <= get_alpha(0) <= 0.8  # Default confidence 0.5 -> lr 0.25 -> alpha 0.75
+    assert get_alpha(10, current_confidence=0.8) == 0.9  # High confidence -> alpha 0.9
+    assert get_alpha(30, current_confidence=0.95) == 0.95  # Max confidence -> alpha 0.95
+    assert get_learning_rate(0, 0.2) > get_learning_rate(50, 0.9)  # Decay with confidence
 
 
 def test_compute_confidence():
-    assert compute_confidence(0) == 0
-    assert compute_confidence(10) > 0.8
+    assert compute_confidence(0) == 0.05  # Minimum bound
+    assert compute_confidence(10) > 0.5  # Confidence rises with games
     assert compute_confidence(5, [5.0, 5.0, 5.0]) > compute_confidence(5, [3.0, 7.0, 5.0])
 
 

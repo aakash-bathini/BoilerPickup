@@ -5,9 +5,9 @@ __pycache__/
 *.db
 *.pt
 *.pkl
-.env
-.env.local
-backend/.env
+# Environments
+.env*
+!.env.example
 node_modules/
 .next/
 out/
@@ -21,3 +21,7 @@ test-results/
 .coverage
 htmlcov/
 *.log
+
+# Training Data
+backend/nba_training_data.csv
+backend/scripts/__pycache__/

@@ -78,6 +78,7 @@ class UserPublic(BaseModel):
     challenge_losses: int = 0
     bio: Optional[str] = None
     is_disabled: bool = False
+    nba_match: Optional[dict] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -113,7 +114,15 @@ class UserSearchResult(BaseModel):
     losses: int = 0
     challenge_wins: int = 0
     challenge_losses: int = 0
-    skill_rating_change_week: Optional[float] = None  # gain over past 7 days (Players on Fire)
+    wins_week: int = 0
+    losses_week: int = 0
+    challenge_wins_week: int = 0
+    challenge_losses_week: int = 0
+    skill_rating_change_week: Optional[float] = None
+    ppg: Optional[float] = 0.0
+    rpg: Optional[float] = 0.0
+    apg: Optional[float] = 0.0
+    nba_match: Optional[dict] = None
 
     model_config = {"from_attributes": True}
 
@@ -188,7 +197,9 @@ class GameOut(BaseModel):
     stats_finalized: bool = False
     stats_finalized_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    win_prediction: Optional[float] = None  # P(Team A wins), 0-1, when roster full
+    win_prediction: Optional[float] = None
+    win_line_moneyline: Optional[str] = None
+    win_line_spread: Optional[float] = None
 
     model_config = {"from_attributes": True}
 

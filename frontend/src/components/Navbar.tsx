@@ -63,7 +63,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           <Link href={user ? '/dashboard' : '/'} className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold-500 to-gold-700 flex items-center justify-center group-hover:shadow-gold transition-shadow">
-              <span className="text-black font-black text-sm">BP</span>
+              <span className="text-black text-xl">🏀</span>
             </div>
             <span className="font-bold text-lg text-white hidden sm:block">Boiler Pickup</span>
           </Link>
@@ -72,11 +72,10 @@ export default function Navbar() {
             <div className="hidden md:flex items-center gap-1">
               {navLinks.map(l => (
                 <Link key={l.href} href={l.href}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    pathname === l.href || pathname?.startsWith(l.href + '/')
-                      ? 'text-gold-400 bg-gold-500/10'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}>
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${pathname === l.href || pathname?.startsWith(l.href + '/')
+                    ? 'text-gold-400 bg-gold-500/10'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}>
                   {l.label}
                 </Link>
               ))}
@@ -92,6 +91,13 @@ export default function Navbar() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => setSearchFocused(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) {
+                      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+                      setSearchFocused(false);
+                      setSearchQuery('');
+                    }
+                  }}
                   className="w-48 lg:w-64 bg-dark-200/60 border border-gold-500/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gold-500/30 focus:w-72 transition-all"
                 />
                 <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -195,9 +201,8 @@ export default function Navbar() {
             {navLinks.map(l => (
               <Link key={l.href} href={l.href}
                 onClick={() => setMobileOpen(false)}
-                className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${
-                  pathname === l.href ? 'text-gold-400 bg-gold-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}>
+                className={`block px-3 py-2.5 rounded-lg text-sm font-medium ${pathname === l.href ? 'text-gold-400 bg-gold-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}>
                 {l.label}
               </Link>
             ))}

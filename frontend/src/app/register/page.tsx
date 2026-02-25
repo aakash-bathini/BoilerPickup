@@ -64,7 +64,7 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      const msg = await api.register({
+      await api.register({
         email: form.email,
         username: form.username,
         password: form.password,
@@ -131,11 +131,10 @@ export default function RegisterPage() {
         <div className="flex items-center justify-center gap-2 mb-8">
           {[1, 2, 3, 4].map(s => (
             <div key={s} className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
-                s < step ? 'bg-gold-500 text-black' :
-                s === step ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40' :
-                'bg-dark-200 text-gray-500'
-              }`}>{s}</div>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${s < step ? 'bg-gold-500 text-black' :
+                  s === step ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40' :
+                    'bg-dark-200 text-gray-500'
+                }`}>{s}</div>
               {s < 4 && <div className={`w-4 h-0.5 ${s < step ? 'bg-gold-500' : 'bg-dark-200'}`} />}
             </div>
           ))}

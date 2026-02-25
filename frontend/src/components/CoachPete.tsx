@@ -33,21 +33,14 @@ interface MatchedPlayer {
 
 type MatchType = 'similar' | 'teammate' | null;
 
-// Purdue Pete–inspired mascot: train engineer / boilermaker coach (gold & black)
+// Bulletproof Custom Local Avatar (Train emoji / Coach aesthetic)
 function PeteMascotIcon({ className = 'w-10 h-10', dark = false }: { className?: string; dark?: boolean }) {
-  const face = dark ? '#2a2a2a' : '#1a1a1a';
-  const accent = '#CFB991';
-  const cap = dark ? '#B89F65' : '#CFB991';
+  const bg = dark ? 'bg-gold-500/20' : 'bg-gold-400/20';
+  const border = dark ? 'border-gold-500/30' : 'border-gold-500/40';
   return (
-    <svg viewBox="0 0 64 64" className={className} fill="none">
-      <circle cx="32" cy="36" r="18" fill={face} stroke={accent} strokeWidth="2" />
-      <path d="M14 28 Q32 16 50 28 L48 32 Q32 22 16 32 Z" fill={cap} stroke="#9A8347" strokeWidth="1" />
-      <path d="M18 26 Q32 18 46 26" stroke="#9A8347" strokeWidth="1.5" fill="none" />
-      <ellipse cx="26" cy="34" rx="3" ry="3.5" fill={accent} />
-      <ellipse cx="38" cy="34" rx="3" ry="3.5" fill={accent} />
-      <path d="M24 42 Q32 48 40 42" stroke={accent} strokeWidth="2" strokeLinecap="round" fill="none" />
-      <circle cx="32" cy="22" r="4" fill="none" stroke={accent} strokeWidth="1.5" strokeDasharray="2 2" />
-    </svg>
+    <div className={`${className} ${bg} ${border} border flex items-center justify-center rounded-2xl shadow-inner overflow-hidden`}>
+      <span className="text-2xl drop-shadow-md pb-0.5">🚂</span>
+    </div>
   );
 }
 
@@ -71,10 +64,8 @@ const NAV_ACTIONS = [
 
 export default function CoachPete() {
   const router = useRouter();
-  const { user, refresh: refreshAuth } = useAuth();
+  const { user } = useAuth();
 
-  // Coach Pete only available when logged in — needs your data to help
-  if (!user) return null;
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([
     { role: 'assistant', content: "Hey! I'm Coach Pete — your AI assistant for Boiler Pickup. Ask me anything: find a teammate, check your stats, get the weather, or I can take you anywhere on the site." },
@@ -88,6 +79,9 @@ export default function CoachPete() {
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Coach Pete only available when logged in — needs your data to help
+  if (!user) return null;
 
   const send = async () => {
     if (!input.trim() || loading) return;
@@ -130,11 +124,10 @@ export default function CoachPete() {
       {/* FAB: Purdue Pete mascot button */}
       <button
         onClick={() => setOpen(!open)}
-        className={`fixed bottom-6 right-6 z-50 rounded-2xl overflow-hidden transition-all duration-300 ease-out ${
-          open
-            ? 'w-12 h-12 bg-dark-300 border border-gold-500/30 shadow-lg rotate-0'
-            : 'w-16 h-16 bg-gradient-to-br from-gold-500 to-gold-700 shadow-gold-lg border-2 border-gold-400/40 animate-pete-idle hover:scale-105 active:scale-95'
-        }`}
+        className={`fixed bottom-6 right-6 z-[999] rounded-2xl overflow-hidden transition-all duration-300 ease-out ${open
+          ? 'w-12 h-12 bg-dark-300 border border-gold-500/30 shadow-lg rotate-0'
+          : 'w-16 h-16 bg-gradient-to-br from-gold-500 to-gold-700 shadow-gold-lg border-2 border-gold-400/40 animate-pete-idle hover:scale-105 active:scale-95'
+          }`}
         title="Coach Pete"
       >
         {open ? (
@@ -153,7 +146,7 @@ export default function CoachPete() {
       {/* Chat panel */}
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-50 w-[400px] max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden flex flex-col animate-slide-up-fade"
+          className="fixed bottom-24 right-6 z-[999] w-[400px] max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden flex flex-col animate-slide-up-fade"
           style={{
             height: '560px',
             background: 'linear-gradient(180deg, rgba(26,26,26,0.98) 0%, rgba(10,10,10,0.99) 100%)',
@@ -196,11 +189,10 @@ export default function CoachPete() {
                 style={{ animationDelay: `${i * 30}ms` }}
               >
                 <div
-                  className={`max-w-[88%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                    m.role === 'user'
-                      ? 'bg-gold-500/20 text-white border border-gold-500/20'
-                      : 'bg-dark-300/80 text-gray-200 border border-gold-500/5'
-                  }`}
+                  className={`max-w-[88%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === 'user'
+                    ? 'bg-gold-500/20 text-white border border-gold-500/20'
+                    : 'bg-dark-300/80 text-gray-200 border border-gold-500/5'
+                    }`}
                 >
                   {m.content.split('\n').map((line, li) => (
                     <p key={li} className={li > 0 ? 'mt-1.5' : ''}>{renderMarkdown(line)}</p>

@@ -3,202 +3,276 @@
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { motion, useScroll, useTransform, Variants } from 'framer-motion';
+import { BrainCircuit, Trophy, Activity, MessageSquare, Users, Star, ArrowRight, Target } from 'lucide-react';
+import { SkillRatingChart } from '@/components/SkillRatingChart';
+
+const MOCK_CHART_DATA = [
+  { timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), rating: 4.0 },
+  { timestamp: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(), rating: 5.2 },
+  { timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), rating: 4.8 },
+  { timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), rating: 6.9 },
+  { timestamp: new Date().toISOString(), rating: 7.4 }
+];
+
+const FADE_UP: Variants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
+};
+
+const STAGGER: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
+};
 
 export default function LandingPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const targetRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: targetRef,
+    offset: ["start start", "end start"]
+  });
+
+  const yBg = useTransform(scrollYProgress, [0, 1], ["0%", "30%"]);
+  const opacityBg = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard');
   }, [user, loading, router]);
 
-  // Skip loading skeleton when clearly not logged in (no token) — instant render
   const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('token');
   const showLoading = loading && hasToken;
 
   if (showLoading) {
     return (
-      <div className="min-h-screen bg-dark-500">
-        <div className="max-w-5xl mx-auto px-4 py-28 md:py-36">
-          <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-dark-300 rounded w-64 mx-auto" />
-            <div className="h-16 bg-dark-300 rounded w-96 mx-auto" />
-            <div className="h-6 bg-dark-300 rounded w-80 mx-auto" />
-            <div className="flex gap-4 justify-center pt-4">
-              <div className="h-12 w-32 bg-dark-300 rounded-xl" />
-              <div className="h-12 w-24 bg-dark-300 rounded-xl" />
-            </div>
-          </div>
-        </div>
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   const features = [
-    { title: 'AI Matchmaking', desc: 'Neural skill model balances teams for fair, competitive games every time.', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-    { title: '1v1 Challenges', desc: 'Challenge any player to a 1v1. Wins and losses affect your skill rating.', icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
-    { title: 'Live Stat Tracking', desc: 'Track PTS, REB, AST, STL, BLK, TOV, and shooting splits every game.', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-    { title: 'Coach Pete AI', desc: 'Sign in to unlock your AI assistant — find teammates, analyze stats, get the weather.', icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' },
+    { title: 'Smart Matchmaking', desc: 'Our analytics engine evaluates player skill sets to construct perfectly balanced teams trained on real NBA data. Every game is competitive.', icon: <BrainCircuit className="w-6 h-6" /> },
+    { title: '1v1 Prove It', desc: 'Challenge rivals directly. Your Elo rating rises with every victory—the ultimate way to climb the ranks.', icon: <Trophy className="w-6 h-6" /> },
+    { title: 'Pro-Level Analytics', desc: 'Track points, rebounds, assists, and shooting percentages. Watch your custom dashboard light up with real data.', icon: <Activity className="w-6 h-6" /> },
+    { title: 'Coach Pete Assistant', desc: 'Your personal AI scout. Find complementary teammates, analyze your shooting slumps, and check court conditions.', icon: <MessageSquare className="w-6 h-6" /> },
   ];
 
-  // Example skill progression (date, rating) — what you'll see on your profile
-  const exampleSkillProgression = [
-    { date: 'Jan 15', rating: 4.2 },
-    { date: 'Jan 18', rating: 4.8 },
-    { date: 'Jan 22', rating: 5.1 },
-    { date: 'Jan 25', rating: 5.6 },
-    { date: 'Jan 28', rating: 5.3 },
-    { date: 'Feb 1', rating: 6.0 },
-    { date: 'Feb 5', rating: 6.4 },
-    { date: 'Feb 8', rating: 6.9 },
-    { date: 'Feb 12', rating: 7.1 },
-  ];
 
-  const gameTypes = [
-    { type: '2v2', court: 'Half Court', desc: 'Quick runs' },
-    { type: '3v3', court: 'Half Court', desc: 'Classic pickup' },
-    { type: '5v5', court: 'Full Court', desc: 'Full squad' },
-  ];
 
   return (
-    <div className="min-h-screen bg-dark-500">
-      {/* Hero — background image via CSS (no Next Image) + dark overlay for readability */}
-      <section
-        className="relative min-h-[70vh] flex flex-col items-center justify-center bg-dark-500 bg-cover bg-center"
-        style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.6) 50%, rgba(10,10,10,1) 100%), url(https://images.unsplash.com/photo-1546519638-68e109498ffc?w=1920&q=80)` }}
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(207,185,145,0.06)_0%,transparent_70%)]" />
-        <div className="relative z-10 max-w-5xl mx-auto px-4 py-28 md:py-36 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gold-500/20 border border-gold-500/30 mb-6 animate-fade-in">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-sm text-gold-300 font-medium">France A. Córdova Recreational Sports Center</span>
-          </div>
-          <h1 className="text-5xl md:text-7xl font-black text-white mb-6 animate-slide-up tracking-tight drop-shadow-lg">
-            Find Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-gold-500">Perfect Game</span>
-          </h1>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-10 animate-slide-up drop-shadow" style={{ animationDelay: '0.1s' }}>
-            AI-powered pickup basketball at the CoRec. Fair teams. Tracked stats. Real competition.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <Link href="/register" className="btn-primary text-lg px-8 py-4 shadow-gold">Get Started</Link>
-            <Link href="/login" className="btn-secondary text-lg px-8 py-4">Sign In</Link>
-          </div>
-        </div>
-      </section>
+    <div className="min-h-screen bg-[#030303] text-zinc-100 overflow-hidden font-sans selection:bg-gold-500/30">
+      {/* Dynamic Hero Section */}
+      <section ref={targetRef} className="relative min-h-[100vh] flex items-center justify-center overflow-hidden pt-20">
+        <motion.div
+          className="absolute inset-0 z-0 bg-cover bg-center"
+          style={{
+            y: yBg,
+            opacity: opacityBg,
+            backgroundImage: `url('https://images.unsplash.com/photo-1519861531473-9200262188bf?q=80&w=2071&auto=format&fit=crop')`
+          }}
+        />
+        <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#030303]/90 via-[#030303]/70 to-[#030303]" />
 
-      {/* Bold game types — StarkHacks-style big numbers */}
-      <section className="py-16 px-4 border-b border-gold-500/10 bg-dark-300/30">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-center text-sm font-semibold text-gray-500 uppercase tracking-widest mb-10">Game Types</h2>
-          <div className="grid grid-cols-3 gap-6 md:gap-12">
-            {gameTypes.map((g, i) => (
-              <div key={g.type} className="text-center group">
-                <div className="text-5xl md:text-7xl font-black text-gold-400 group-hover:text-gold-300 transition-colors duration-300" style={{ textShadow: '0 0 40px rgba(207, 185, 145, 0.2)' }}>
-                  {g.type}
-                </div>
-                <div className="text-sm font-medium text-gray-400 mt-1">{g.court}</div>
-                <div className="text-xs text-gray-500 mt-0.5">{g.desc}</div>
+        <div className="relative z-10 max-w-6xl mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center">
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={STAGGER}
+            className="flex flex-col gap-6"
+          >
+            <motion.div variants={FADE_UP} className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gold-400/10 border border-gold-400/20 backdrop-blur-md w-fit">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-gold-500"></span>
+              </span>
+              <span className="text-sm font-medium text-gold-200 tracking-wide">Purdue CoRec Pickup</span>
+            </motion.div>
+
+            <motion.h1 variants={FADE_UP} className="text-6xl md:text-[7rem] font-black tracking-tighter leading-[0.9] text-transparent bg-clip-text bg-gradient-to-r from-gold-400 via-gold-200 to-gold-600 drop-shadow-[0_0_15px_rgba(207,185,145,0.3)] pb-2 flex flex-col md:flex-row items-start md:items-center gap-0 md:gap-4">
+              <span className="text-6xl md:text-[6rem]">🏀</span> BOILER PICKUP
+            </motion.h1>
+            <motion.h2 variants={FADE_UP} className="text-3xl md:text-5xl font-black tracking-tight text-white mt-1">
+              RULE THE HARDWOOD.
+            </motion.h2>
+
+            <motion.p variants={FADE_UP} className="text-lg md:text-xl text-zinc-400 max-w-lg leading-relaxed font-light">
+              Elevate your game. Elite skill-based matchmaking, precise metric tracking, and pure competition.
+              Built for the players who want more than just a run.
+            </motion.p>
+
+            <motion.div variants={FADE_UP} className="flex flex-col sm:flex-row gap-4 mt-4">
+              <Link href="/register" className="group relative inline-flex items-center justify-center px-8 py-4 text-sm font-bold text-black bg-gold-500 rounded-xl overflow-hidden transition-all hover:scale-[1.02] shadow-[0_0_40px_-10px_rgba(207,185,145,0.4)]">
+                <span className="absolute w-0 h-0 transition-all duration-500 ease-out bg-white rounded-full group-hover:w-56 group-hover:h-56 opacity-10"></span>
+                <span>Get on the Court</span>
+                <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <Link href="/login" className="inline-flex items-center justify-center px-8 py-4 text-sm font-medium text-white border border-white/10 rounded-xl bg-white/5 backdrop-blur-md hover:bg-white/10 transition-colors">
+                Sign In
+              </Link>
+            </motion.div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, rotate: -5 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
+            className="hidden lg:block relative"
+          >
+            <div className="absolute inset-0 bg-gold-500/20 blur-[100px] rounded-full" />
+            <div className="relative bg-[#050505] p-6 rounded-[2rem] border border-white/10 backdrop-blur-xl shadow-2xl skew-y-[-2deg] transform-gpu">
+              <div className="w-[450px] h-[300px] mb-8 relative z-10">
+                <SkillRatingChart data={MOCK_CHART_DATA} />
               </div>
-            ))}
-          </div>
+              <div className="absolute bottom-6 left-6 -right-6 flex justify-between px-6 py-4 bg-[#0a0a0a]/80 backdrop-blur-lg rounded-2xl border border-white/10 shadow-2xl">
+                <div>
+                  <div className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Win Probability</div>
+                  <div className="text-white text-2xl font-black mt-1 flex items-center">
+                    68.2%
+                    <span className="text-emerald-400 text-sm ml-2 flex items-center bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">Favored</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">AI Skill Rating</div>
+                  <div className="text-gold-400 text-2xl font-black mt-1">7.4 <span className="text-zinc-500 text-sm">/ 10</span></div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* Live preview — skill rating progression (what you'll see on your profile) */}
-      <section className="py-20 px-4 border-b border-gold-500/10">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-bold text-center text-white mb-2">See Your Progress</h2>
-          <p className="text-gray-500 text-center mb-8 max-w-lg mx-auto">Your skill rating (1–10) tracked over time — view this on your profile as you play.</p>
-          <div className="glass-card p-6 group hover:border-gold-500/20 transition-colors duration-300">
-            <div className="text-sm font-medium text-gray-400 mb-4">Skill Rating Progression</div>
-            <p className="text-[10px] text-gray-500 mb-2">Rating up and down over time (example)</p>
-            <div className="h-28">
-              <svg viewBox="0 0 100 60" className="w-full h-full" preserveAspectRatio="none">
-                <polyline
-                  fill="none"
-                  stroke="#CFB991"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  points={exampleSkillProgression.map((d, i) => {
-                    const x = (i / Math.max(1, exampleSkillProgression.length - 1)) * 96 + 2;
-                    const y = 56 - ((d.rating - 4) / 3.5) * 48;
-                    return `${x} ${y}`;
-                  }).join(' ')}
-                />
-              </svg>
-            </div>
-            <div className="flex justify-between mt-2 text-[10px] text-gray-600">
-              <span>{exampleSkillProgression[0]?.date}</span>
-              <span>{exampleSkillProgression[exampleSkillProgression.length - 1]?.rating.toFixed(1)}</span>
-              <span>{exampleSkillProgression[exampleSkillProgression.length - 1]?.date}</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Feature Grid */}
+      <section className="py-32 relative">
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        <div className="max-w-6xl mx-auto px-6">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={STAGGER}
+            className="mb-20"
+          >
+            <motion.h2 variants={FADE_UP} className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">The Future of Pickup.</motion.h2>
+            <motion.p variants={FADE_UP} className="text-zinc-400 max-w-2xl text-lg font-light">Eliminate the uneven squads. Our ML pipeline analyzes vast stat histories to organize the most competitive games possible.</motion.p>
+          </motion.div>
 
-      {/* Features */}
-      <section className="py-20 px-4">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center text-white mb-4">Built for Ballers</h2>
-          <p className="text-gray-500 text-center mb-14 max-w-xl mx-auto">Everything you need to organize, compete, and improve at pickup basketball.</p>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={STAGGER}
+            className="grid md:grid-cols-2 lg:grid-cols-4 gap-6"
+          >
             {features.map((f, i) => (
-              <div key={f.title} className="glass-card-hover p-6 animate-slide-up transition-all duration-300 group" style={{ animationDelay: `${i * 0.08}s` }}>
-                <div className="w-12 h-12 rounded-xl bg-gold-500/10 border border-gold-500/20 flex items-center justify-center mb-4 group-hover:bg-gold-500/15 group-hover:border-gold-500/30 transition-colors">
-                  <svg className="w-6 h-6 text-gold-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={f.icon} />
-                  </svg>
+              <motion.div key={i} variants={FADE_UP} className="group p-8 rounded-3xl bg-zinc-900/30 border border-white/5 hover:bg-zinc-900/50 hover:border-gold-500/30 transition-all duration-500 relative overflow-hidden">
+                <div className="absolute -inset-px bg-gradient-to-br from-gold-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl -z-10" />
+                <div className="w-12 h-12 rounded-2xl bg-gold-400/10 text-gold-400 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 shadow-inner border border-gold-400/20">
+                  {f.icon}
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">{f.title}</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">{f.desc}</p>
-              </div>
+                <h3 className="text-xl font-bold mb-3 text-white group-hover:text-gold-100 transition-colors">{f.title}</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed font-light">{f.desc}</p>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="py-20 px-4 bg-dark-300/40">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-white mb-6">How It Works</h2>
-          <div className="grid md:grid-cols-3 gap-8">
+      {/* Trajectory / Graph Section */}
+      <section className="py-24 bg-zinc-950 relative overflow-hidden">
+        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center relative z-10">
+          <motion.div
+            initial={{ opacity: 0, x: -40 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+          >
+            <h2 className="text-4xl font-bold mb-6 tracking-tight">Prove your worth. <br /><span className="text-zinc-500 text-3xl font-medium tracking-normal">Watch your stock rise.</span></h2>
+            <p className="text-zinc-400 mb-8 font-light leading-relaxed">
+              Start at baseline and forge your legacy. The dynamic Glicko-2 rating system updates precisely after every game based on the strength of your opponents and your on-court efficiency.
+            </p>
+            <ul className="space-y-4">
+              {[
+                { label: 'Defeat tough opponents to climb faster', icon: <Star className="w-5 h-5 text-gold-500" /> },
+                { label: 'High individual efficiency boosts your rating', icon: <Activity className="w-5 h-5 text-gold-500" /> },
+                { label: 'Compete in 1v1s for raw ranking power', icon: <Users className="w-5 h-5 text-gold-500" /> }
+              ].map((item, i) => (
+                <li key={i} className="flex items-center gap-4 text-zinc-300">
+                  <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">{item.icon}</div>
+                  <span className="font-medium text-sm">{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="grid grid-cols-2 gap-4 relative z-10"
+          >
             {[
-              { step: '1', title: 'Create Your Profile', desc: 'Sign up with your Purdue email and set your skill level.' },
-              { step: '2', title: 'Find or Create a Game', desc: 'Browse games at your skill level or organize your own at the CoRec.' },
-              { step: '3', title: 'Play & Track', desc: 'AI balances teams. Track stats. Climb the leaderboard. Coach Pete helps when you need it.' },
+              { label: 'Team Record', value: '4W-1L', sub: '80% Win Rate', icon: <Users className="w-5 h-5 text-zinc-400" /> },
+              { label: '1v1 Record', value: '7W-2L', sub: '77% Win Rate', icon: <Target className="w-5 h-5 text-orange-400" /> },
+              { label: 'Skill Certainty', value: '92%', sub: 'Rating Consistency', icon: <Activity className="w-5 h-5 text-blue-400" />, bar: 0.92 },
+              { label: 'Player Rating', value: '7.4', sub: 'High Confidence', icon: <Trophy className="w-5 h-5 text-gold-400" /> }
             ].map((s) => (
-              <div key={s.step} className="flex flex-col items-center">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gold-500 to-gold-700 flex items-center justify-center text-black text-xl font-black mb-4 shadow-gold">{s.step}</div>
-                <h3 className="text-lg font-semibold text-white mb-2">{s.title}</h3>
-                <p className="text-sm text-gray-400">{s.desc}</p>
+              <div key={s.label} className="bg-[#050505] border border-white/5 hover:border-white/10 p-6 rounded-3xl shadow-xl transition-all duration-300">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-2 bg-white/5 rounded-xl border border-white/5">
+                    {s.icon}
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-white tracking-tight mb-1">{s.value}</div>
+                <div className="text-sm text-zinc-500 font-medium">{s.label}</div>
+                <div className="text-xs text-zinc-600 mt-1">{s.sub}</div>
+                {s.bar != null && (
+                  <div className="mt-3 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-zinc-500 to-white transition-all duration-1000 ease-out"
+                      style={{ width: `${s.bar * 100}%` }}
+                    />
+                  </div>
+                )}
               </div>
             ))}
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </section >
 
-      {/* CTA */}
-      <section className="py-20 px-4">
-        <div className="max-w-3xl mx-auto text-center glass-card p-12 border border-gold-500/10 hover:border-gold-500/20 transition-colors">
-          <h2 className="text-3xl font-bold text-white mb-4">Ready to Ball?</h2>
-          <p className="text-gray-400 mb-6">Join the Purdue pickup basketball community. Sign in to unlock Coach Pete — your AI assistant in the corner.</p>
-          <Link href="/register" className="btn-primary text-lg px-10 py-4">Create Free Account</Link>
-        </div>
-      </section>
+      {/* CTA Footer */}
+      < section className="py-24 px-6 relative" >
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="max-w-4xl mx-auto bg-gradient-to-br from-gold-500/10 to-transparent border border-gold-500/20 rounded-[2.5rem] p-12 md:p-20 text-center relative overflow-hidden"
+        >
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-gold-400 to-transparent" />
+          <h2 className="text-4xl md:text-5xl font-black mb-6 text-white tracking-tight">Step onto the court.</h2>
+          <p className="text-xl text-zinc-400 mb-10 max-w-xl mx-auto font-light">
+            Join the Purdue pickup basketball community where every shot, rebound, and win builds your legacy.
+          </p>
+          <Link href="/register" className="inline-flex items-center justify-center px-10 py-5 text-base font-bold text-black bg-gold-400 hover:bg-gold-300 rounded-2xl transition-all hover:scale-105 hover:shadow-[0_0_50px_-10px_rgba(207,185,145,0.5)]">
+            Create Free Account
+          </Link>
+        </motion.div>
+      </section >
 
-      <footer className="border-t border-gold-500/10 py-8 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gold-500 to-gold-700 flex items-center justify-center">
-              <span className="text-black font-black text-xs">BP</span>
-            </div>
-            <span className="text-sm text-gray-500">Boiler Pickup — ECE 570 AI Project</span>
+      {/* Footer */}
+      < footer className="py-8 px-6 border-t border-white/5 bg-[#030303]" >
+        <div className="max-w-6xl mx-auto flex justify-between items-center text-sm font-medium text-zinc-600">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gold-500/10 flex items-center justify-center text-xl">🏀</div>
+            Boiler Pickup
           </div>
-          <p className="text-xs text-gray-600">Purdue University · France A. Córdova Recreational Sports Center</p>
+          <div>Purdue University • CoRec</div>
         </div>
-      </footer>
-    </div>
+      </footer >
+    </div >
   );
 }
