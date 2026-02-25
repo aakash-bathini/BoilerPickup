@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+  --gold: #CFB991;
+  --gold-light: #E8D5A3;
+  --gold-dark: #B89F65;
+  --bg-primary: #0A0A0A;
+  --bg-secondary: #141414;
+  --bg-card: #1A1A1A;
+  --border: rgba(207, 185, 145, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-primary);
+  color: #f5f5f5;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-dark-200/60 backdrop-blur-xl border border-gold-500/10
+           rounded-2xl shadow-card transition-all duration-300;
+  }
+
+  .glass-card-hover {
+    @apply glass-card hover:border-gold-500/25 hover:shadow-gold;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-gold-500 to-gold-600 text-black
+           font-semibold px-6 py-3 rounded-xl
+           hover:from-gold-400 hover:to-gold-500
+           transition-all duration-200 transform hover:scale-[1.02]
+           active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed
+           disabled:hover:scale-100;
+  }
+
+  .btn-secondary {
+    @apply border border-gold-500/30 text-gold-500
+           font-medium px-6 py-3 rounded-xl
+           hover:bg-gold-500/10 hover:border-gold-500/50
+           transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply border border-red-500/30 text-red-400
+           font-medium px-6 py-3 rounded-xl
+           hover:bg-red-500/10 hover:border-red-500/50
+           transition-all duration-200;
+  }
+
+  .input-field {
+    @apply w-full bg-dark-300/80 border border-gold-500/10
+           rounded-xl px-4 py-3 text-white placeholder-gray-500
+           focus:outline-none focus:border-gold-500/40 focus:ring-1
+           focus:ring-gold-500/20 transition-all duration-200;
+  }
+
+  .label-text {
+    @apply block text-sm font-medium text-gray-300 mb-1.5;
+  }
+
+  .stat-value {
+    @apply text-2xl font-bold text-white;
+  }
+
+  .stat-label {
+    @apply text-xs font-medium text-gray-400 uppercase tracking-wider;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full
+           text-xs font-medium;
+  }
+
+  .badge-gold {
+    @apply badge bg-gold-500/15 text-gold-400 border border-gold-500/20;
+  }
+
+  .badge-green {
+    @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/20;
+  }
+
+  .badge-red {
+    @apply badge bg-red-500/15 text-red-400 border border-red-500/20;
+  }
+
+  .badge-blue {
+    @apply badge bg-blue-500/15 text-blue-400 border border-blue-500/20;
+  }
+
+  .section-title {
+    @apply text-2xl font-bold text-white mb-6;
+  }
+
+  .page-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0A0A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(207, 185, 145, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(207, 185, 145, 0.4);
+}
