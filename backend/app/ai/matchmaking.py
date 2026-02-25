@@ -81,7 +81,27 @@ def _assign_with_model(model, game: Game, participants: list[GameParticipant]):
 
 
 def _greedy_assign(participants: list[GameParticipant]):
-    """Greedy skill-sort alternating assignment."""
+    """Minimize skill imbalance: for n<=6 try all splits, else greedy alternate."""
+    n = len(participants)
+    team_size = n // 2
+    skills = [p.user.ai_skill_rating if p.user else 5.0 for p in participants]
+
+    if n <= 6:
+        best_imbalance = float("inf")
+        best_split = None
+        for team_a_indices in combinations(range(n), team_size):
+            team_b_indices = [i for i in range(n) if i not in team_a_indices]
+            sum_a = sum(skills[i] for i in team_a_indices)
+            sum_b = sum(skills[i] for i in team_b_indices)
+            imb = abs(sum_a - sum_b)
+            if imb < best_imbalance:
+                best_imbalance = imb
+                best_split = (set(team_a_indices), set(team_b_indices))
+        if best_split:
+            for i, p in enumerate(participants):
+                p.team = "A" if i in best_split[0] else "B"
+            return
+
     sorted_p = sorted(
         participants,
         key=lambda p: p.user.ai_skill_rating if p.user else 0,

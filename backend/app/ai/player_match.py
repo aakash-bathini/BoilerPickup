@@ -79,6 +79,41 @@ def _get_career_stats(db: Session, user_id: int) -> dict:
     }
 
 
+def _get_career_stats_bulk(db: Session, user_ids: list[int]) -> dict[int, dict]:
+    """Bulk fetch career stats for many users. Returns {user_id: stats}."""
+    if not user_ids:
+        return {}
+    rows = (
+        db.query(
+            PlayerGameStats.user_id,
+            func.avg(PlayerGameStats.pts).label("ppg"),
+            func.avg(PlayerGameStats.reb).label("rpg"),
+            func.avg(PlayerGameStats.ast).label("apg"),
+            func.avg(PlayerGameStats.stl).label("spg"),
+            func.avg(PlayerGameStats.blk).label("bpg"),
+            func.avg(PlayerGameStats.tov).label("topg"),
+            func.sum(PlayerGameStats.fgm).label("fgm"),
+            func.sum(PlayerGameStats.fga).label("fga"),
+        )
+        .filter(PlayerGameStats.user_id.in_(user_ids))
+        .group_by(PlayerGameStats.user_id)
+        .all()
+    )
+    out = {}
+    for r in rows:
+        fga = r.fga or 0
+        fg_pct = (r.fgm or 0) / fga if fga > 0 else 0.5
+        out[r.user_id] = {
+            "ppg": float(r.ppg or 0), "rpg": float(r.rpg or 0), "apg": float(r.apg or 0),
+            "spg": float(r.spg or 0), "bpg": float(r.bpg or 0), "topg": float(r.topg or 0),
+            "fg_pct": fg_pct,
+        }
+    for uid in user_ids:
+        if uid not in out:
+            out[uid] = {"ppg": 0, "rpg": 0, "apg": 0, "spg": 0, "bpg": 0, "topg": 0, "fg_pct": 0.5}
+    return out
+
+
 def find_matches(
     db: Session,
     user_id: int,

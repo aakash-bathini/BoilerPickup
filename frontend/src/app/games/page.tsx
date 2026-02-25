@@ -84,7 +84,7 @@ export default function GamesPage() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {games.map((g, i) => (
             <Link key={g.id} href={`/games/${g.id}`}
-              className="glass-card-hover p-5 animate-slide-up cursor-pointer" style={{ animationDelay: `${i * 0.03}s` }}>
+              className="glass-card-hover p-5 animate-slide-up cursor-pointer" style={{ animationDelay: `${Math.min(i * 0.02, 0.3)}s` }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 rounded-lg bg-gold-500/10 text-gold-400 text-sm font-bold">{g.game_type}</span>
@@ -94,7 +94,7 @@ export default function GamesPage() {
               </div>
               <div className="text-sm text-gray-300 mb-2">{formatESTShort(g.scheduled_time)}</div>
               <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>Skill {g.skill_min.toFixed(0)}-{g.skill_max.toFixed(0)}</span>
+                <span>Skill {g.skill_min.toFixed(1)}-{g.skill_max.toFixed(1)}</span>
                 <span>{g.participants.length}/{g.max_players} players</span>
               </div>
               {(g.status === 'full' || g.status === 'in_progress') && g.win_prediction != null && (

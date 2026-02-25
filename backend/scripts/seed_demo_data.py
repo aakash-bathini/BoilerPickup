@@ -3,7 +3,9 @@
 Seed demo data: users, games, challenges, messages, etc.
 Enables model training and tests all app features.
 
-Run from backend/: python scripts/seed_demo_data.py
+Run from backend/: python scripts/seed_demo_data.py [--reset]
+
+  --reset  Clear all seeded data and start fresh (users, games, challenges, etc.)
 
 Creates:
 - 120 users with skill ratings spread 1.0–10.0 (elite to beginner)
@@ -14,6 +16,7 @@ Creates:
 - Open/full/in_progress games, stats contests, reschedule proposals
 - Skill rating backfill for leaderboard and model training
 """
+import argparse
 import random
 import sys
 from datetime import datetime, timezone, timedelta
@@ -46,19 +49,19 @@ MSG_PER_GAME_CHAT = (3, 8)
 NUM_STATS_CONTESTS = 5
 NUM_RESCHEDULE_PROPOSALS = 5
 
-# Skill distribution: ensure full 1–10 spread for testing
-# (count, min_skill, max_skill) — creates users across the full range
+# Skill distribution: full 1–10 spread. Smart mix: very bad, average, very good.
+# Amateur pickup — not NBA. Self-reported only at start; Elo trains from games.
 SKILL_BUCKETS = [
-    (4, 1.0, 1.5),   # Very low (1–1.5)
-    (6, 1.5, 2.5),   # Low
-    (10, 2.5, 3.5),  # Below average
-    (15, 3.5, 4.5),  # Slightly below
-    (25, 4.5, 5.5),  # Average (largest group)
-    (25, 5.5, 6.5),  # Above average
-    (15, 6.5, 7.5),  # Good
-    (10, 7.5, 8.5),  # Very good
+    (8, 1.0, 1.8),   # Very bad — beginners
+    (8, 1.8, 2.5),   # Bad
+    (12, 2.5, 3.5),  # Below average
+    (18, 3.5, 4.5),  # Slightly below
+    (22, 4.5, 5.5),  # Average (largest)
+    (18, 5.5, 6.5),  # Above average
+    (12, 6.5, 7.5),  # Good
+    (10, 7.5, 8.5),  # Very good — can reach ~9 with wins
     (6, 8.5, 9.5),   # Elite
-    (4, 9.5, 10.0),  # Top tier
+    (6, 9.2, 10.0),  # Top tier — very good players near 10
 ]
 
 FIRST_NAMES = [
@@ -159,6 +162,7 @@ def create_users(db, n: int = NUM_USERS) -> list[User]:
             height=random.choice(HEIGHTS),
             weight=random.randint(160, 220) if random.random() > 0.3 else None,
             preferred_position=random.choice(POSITIONS),
+            gender=random.choice(["male", "female", "male", "female", "other"]),
             self_reported_skill=min(10, max(1, int(round(skill)))),
             ai_skill_rating=skill,
             skill_confidence=round(random.uniform(0.3, 0.95), 2),
@@ -192,9 +196,10 @@ def create_completed_game(db, users: list[User], game_type: str, creator: User) 
     max_players = {"5v5": 10, "3v3": 6, "2v2": 4}[game_type]
     n_per_team = max_players // 2
 
-    # Use a skill band that includes creator
+    # Use a skill band that includes creator. 20% of games use wider band to mix
+    # high/low skill → produces 1s and 10s after backfill
     cr_skill = creator.ai_skill_rating or 5.0
-    band = 2.0
+    band = 4.0 if random.random() < 0.3 else 2.0  # 30% wide-band games for 1–10 spread
     skill_min = max(1.0, cr_skill - band)
     skill_max = min(10.0, cr_skill + band)
 
@@ -209,11 +214,17 @@ def create_completed_game(db, users: list[User], game_type: str, creator: User) 
     team_a = chosen[:n_per_team]
     team_b = chosen[n_per_team:]
 
+    # Bias winner by skill: higher-skill team wins ~80% so ratings spread 1–10
+    sum_a = sum(u.ai_skill_rating or 5.0 for u in team_a)
+    sum_b = sum(u.ai_skill_rating or 5.0 for u in team_b)
+    skill_diff = sum_a - sum_b
+    p_a_wins = 0.5 + 0.35 * max(-1, min(1, skill_diff / 2.5))  # 0.15–0.85
+    higher_skill_wins = random.random() < p_a_wins
+
     scheduled = _utcnow() - timedelta(days=random.randint(1, 90))
-    # Pickup: game to 15. Winner = 15, loser = 0–14 (8–14 for closer games)
     winner_score = 15
     loser_score = random.randint(8, 14) if random.random() > 0.2 else random.randint(0, 7)
-    if random.random() > 0.5:
+    if higher_skill_wins:
         team_a_score, team_b_score = winner_score, loser_score
     else:
         team_a_score, team_b_score = loser_score, winner_score
@@ -234,7 +245,35 @@ def create_completed_game(db, users: list[User], game_type: str, creator: User) 
     db.flush()
 
     winning_team = "A" if game.team_a_score > game.team_b_score else "B"
-    base = {"5v5": (3, 2, 1), "3v3": (5, 3, 1), "2v2": (7, 4, 2)}[game_type]
+    # Research-based position stats (pickup to 15): C=reb/blk, PG=ast/stl, SG/SF=pts, PF=reb
+    # 5v5 baselines per position: (pts, reb, ast, stl, blk, tov)
+    POS_BASELINES = {
+        "5v5": {"PG": (2.5, 1.5, 3.0, 1.0, 0.2, 1.2), "SG": (4.0, 2.0, 1.5, 0.8, 0.3, 1.0),
+                "SF": (3.5, 2.5, 1.5, 0.7, 0.4, 1.0), "PF": (3.0, 4.0, 1.0, 0.5, 0.8, 1.0),
+                "C": (2.5, 5.0, 0.5, 0.3, 1.2, 0.8)},
+        "3v3": {"PG": (4.0, 2.5, 4.0, 1.2, 0.3, 1.5), "SG": (6.0, 3.0, 2.0, 1.0, 0.5, 1.2),
+                "SF": (5.0, 4.0, 2.0, 0.9, 0.6, 1.2), "PF": (5.0, 5.5, 1.5, 0.7, 1.2, 1.2),
+                "C": (4.0, 6.5, 1.0, 0.5, 1.5, 1.0)},
+        "2v2": {"PG": (6.0, 3.5, 5.0, 1.5, 0.4, 1.8), "SG": (8.0, 4.0, 2.5, 1.2, 0.6, 1.5),
+                "SF": (7.0, 5.0, 2.5, 1.0, 0.8, 1.5), "PF": (6.5, 6.5, 2.0, 0.9, 1.5, 1.2),
+                "C": (5.5, 8.0, 1.5, 0.6, 2.0, 1.0)},
+    }
+    bases = POS_BASELINES.get(game_type, POS_BASELINES["5v5"])
+
+    def _stats_for_player(p):
+        pos = p.preferred_position or "SF"
+        b = bases.get(pos, bases["SF"])
+        skill = p.ai_skill_rating or 5.0
+        mult = 0.65 + 0.07 * skill  # 2.0→0.79, 5.0→1.0, 9.0→1.28
+        pts = max(0, int(random.gauss(b[0] * mult, max(1, b[0] * 0.4))))
+        reb = max(0, int(random.gauss(b[1] * mult, max(1, b[1] * 0.35))))
+        ast = max(0, int(random.gauss(b[2] * mult, max(0.5, b[2] * 0.4))))
+        stl = max(0, int(random.gauss(b[3] * mult, 0.5)))
+        blk = max(0, int(random.gauss(b[4] * mult, 0.4)))
+        tov = max(0, int(random.gauss(b[5], 0.5)))
+        fgm = pts
+        fga = max(fgm + 2, pts + random.randint(2, 8))
+        return pts, reb, ast, stl, blk, tov, fgm, fga
 
     for p in team_a:
         gp = GameParticipant(user_id=p.id, game_id=game.id, team="A")
@@ -242,15 +281,11 @@ def create_completed_game(db, users: list[User], game_type: str, creator: User) 
         p.games_played += 1
         p.wins += 1 if winning_team == "A" else 0
         p.losses += 1 if winning_team != "A" else 0
-        pts = max(0, int(random.gauss(base[0], 3)))
-        reb = max(0, int(random.gauss(base[1], 2)))
-        ast = max(0, int(random.gauss(base[2], 1)))
-        fgm = pts
-        fga = max(fgm + 2, pts + random.randint(2, 8))
+        pts, reb, ast, stl, blk, tov, fgm, fga = _stats_for_player(p)
         db.add(PlayerGameStats(
             user_id=p.id, game_id=game.id,
-            pts=pts, reb=reb, ast=ast, stl=random.randint(0, 3), blk=random.randint(0, 2),
-            tov=random.randint(0, 3), fgm=fgm, fga=fga, three_pm=min(pts, random.randint(0, 3)),
+            pts=pts, reb=reb, ast=ast, stl=stl, blk=blk, tov=tov,
+            fgm=fgm, fga=fga, three_pm=min(pts, random.randint(0, 3)),
             three_pa=random.randint(0, 5), ftm=random.randint(0, 4), fta=random.randint(0, 4),
         ))
 
@@ -260,27 +295,26 @@ def create_completed_game(db, users: list[User], game_type: str, creator: User) 
         p.games_played += 1
         p.wins += 1 if winning_team == "B" else 0
         p.losses += 1 if winning_team != "B" else 0
-        pts = max(0, int(random.gauss(base[0], 3)))
-        reb = max(0, int(random.gauss(base[1], 2)))
-        ast = max(0, int(random.gauss(base[2], 1)))
-        fgm = pts
-        fga = max(fgm + 2, pts + random.randint(2, 8))
+        pts, reb, ast, stl, blk, tov, fgm, fga = _stats_for_player(p)
         db.add(PlayerGameStats(
             user_id=p.id, game_id=game.id,
-            pts=pts, reb=reb, ast=ast, stl=random.randint(0, 3), blk=random.randint(0, 2),
-            tov=random.randint(0, 3), fgm=fgm, fga=fga, three_pm=min(pts, random.randint(0, 3)),
+            pts=pts, reb=reb, ast=ast, stl=stl, blk=blk, tov=tov,
+            fgm=fgm, fga=fga, three_pm=min(pts, random.randint(0, 3)),
             three_pa=random.randint(0, 5), ftm=random.randint(0, 4), fta=random.randint(0, 4),
         ))
     return game
 
 
 def create_challenge(db, u1: User, u2: User) -> Challenge | None:
-    """Create a completed 1v1 challenge (pickup: game to 15)."""
+    """Create a completed 1v1 challenge (pickup: game to 15). Bias by skill: higher wins ~78%."""
     if u1.id == u2.id:
         return None
+    s1 = u1.ai_skill_rating or 5.0
+    s2 = u2.ai_skill_rating or 5.0
+    p1_wins = 0.5 + 0.28 * max(-1, min(1, (s1 - s2) / 2.5))
     winner_score = 15
     loser_score = random.randint(8, 14) if random.random() > 0.2 else random.randint(0, 7)
-    score_a = winner_score if random.random() > 0.5 else loser_score
+    score_a = winner_score if random.random() < p1_wins else loser_score
     score_b = loser_score if score_a == winner_score else winner_score
     if score_a == score_b:
         score_a += 1
@@ -327,12 +361,8 @@ def create_open_game(db, users: list[User], game_type: str, creator: User) -> Ga
     )
     db.add(game)
     db.flush()
-    for i, p in enumerate(chosen):
-        if status == "full" and len(chosen) == max_players:
-            team = "A" if i < max_players // 2 else "B"
-        else:
-            team = "A" if i % 2 == 0 else "B" if len(chosen) > 1 else "unassigned"
-        db.add(GameParticipant(user_id=p.id, game_id=game.id, team=team))
+    for p in chosen:
+        db.add(GameParticipant(user_id=p.id, game_id=game.id, team="unassigned"))
     return game
 
 
@@ -420,9 +450,9 @@ def create_pending_challenges(db, users: list[User], n: int) -> int:
     return created
 
 
-def create_in_progress_game(db, users: list[User], game_type: str = "5v5") -> Game | None:
-    """Create an in_progress game (full roster, no score yet)."""
-    creator = random.choice(users)
+def create_in_progress_game(db, users: list[User], game_type: str = "5v5", creator: User | None = None) -> Game | None:
+    """Create an in_progress game (full roster, no score yet). Optional creator for stats testing."""
+    creator = creator or random.choice(users)
     max_players = {"5v5": 10, "3v3": 6, "2v2": 4}[game_type]
     pool = [u for u in users if u.id != creator.id]
     if len(pool) < max_players - 1:
@@ -550,9 +580,38 @@ def backfill_skill_ratings(db) -> int:
     return len(games)
 
 
+def reset_all(db):
+    """Clear all seeded data for fresh start. Order matters for FKs."""
+    from app.models import Message, ContestVote, StatsContest, GameRescheduleVote, GameReschedule
+    from app.models import Block, Report, PendingRegistration
+    db.query(Message).delete()
+    db.query(ContestVote).delete()
+    db.query(StatsContest).delete()
+    db.query(GameRescheduleVote).delete()
+    db.query(GameReschedule).delete()
+    db.query(PlayerGameStats).delete()
+    db.query(GameParticipant).delete()
+    db.query(SkillHistory).delete()
+    db.query(Challenge).delete()
+    db.query(Game).delete()
+    db.query(Block).delete()
+    db.query(Report).delete()
+    db.query(PendingRegistration).delete()
+    db.query(User).delete()
+    db.commit()
+    print("  Reset complete. All users, games, challenges removed.")
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--reset", action="store_true", help="Clear all data before seeding")
+    args = parser.parse_args()
+
     db = SessionLocal()
     try:
+        if args.reset:
+            print("Resetting all data...")
+            reset_all(db)
         print("Seeding demo data...")
         existing = db.query(User).filter(User.is_disabled == False).count()
         users = db.query(User).filter(User.is_disabled == False).all()
@@ -647,7 +706,31 @@ def main():
                 gt = random.choice(["5v5", "3v3", "2v2"])
                 create_in_progress_game(db, users, gt)
             db.commit()
+        # Stats test user: johnsmith@purdoo.com / johnson — creator of an in-progress game
+        john = db.query(User).filter(User.email == "johnsmith@purdoo.com").first()
+        if not john:
+            john = User(
+                email="johnsmith@purdoo.com",
+                username="johnsmith",
+                password_hash=hash_password("johnson"),
+                display_name="John Smith",
+                height="6'2",
+                preferred_position="PG",
+                self_reported_skill=6,
+                ai_skill_rating=6.0,
+                skill_confidence=0.8,
+                games_played=10,
+                wins=6,
+                losses=4,
+                email_verified=True,
+            )
+            db.add(john)
+            db.flush()
+            users = db.query(User).filter(User.is_disabled == False).all()
+        create_in_progress_game(db, users, "3v3", creator=john)
+        db.commit()
         print(f"  In-progress games: {db.query(Game).filter(Game.status == 'in_progress').count()}")
+        print("  Stats test: johnsmith@purdoo.com / johnson (creator of an in-progress game)")
 
         # DM messages
         dm_count = db.query(Message).filter(Message.game_id.is_(None)).count()
@@ -702,6 +785,7 @@ def main():
         print("  1. Train win predictor: curl -X POST http://localhost:8000/api/train-predictor")
         print("  2. Browse the app — users, games, challenges, leaderboard should be populated")
         print("  3. Login with any seeded user: <username>@purdue.edu / demo123")
+        print("  4. Stats testing: johnsmith@purdoo.com / johnson (creator of an in-progress game)")
     except Exception as e:
         db.rollback()
         raise

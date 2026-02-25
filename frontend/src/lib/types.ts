@@ -5,6 +5,7 @@ export interface User {
   height: string | null;
   weight: number | null;
   preferred_position: string | null;
+  gender: string | null;
   self_reported_skill: number;
   ai_skill_rating: number;
   skill_confidence: number;

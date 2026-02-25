@@ -109,6 +109,29 @@ def test_leave_game(client, auth_headers, second_auth_headers):
     assert len(leave_resp.json()["participants"]) == 1
 
 
+def test_leave_resets_teams_to_joined(client, auth_headers, second_auth_headers, third_auth_headers, fourth_auth_headers):
+    """When roster becomes incomplete, everyone goes back to Joined Players (unassigned)."""
+    create_resp = client.post("/api/games", headers=auth_headers, json={
+        "game_type": "2v2",
+        "scheduled_time": _future_time(),
+        "skill_min": 1.0,
+        "skill_max": 10.0,
+    })
+    game_id = create_resp.json()["id"]
+    client.post(f"/api/games/{game_id}/join", headers=second_auth_headers)
+    client.post(f"/api/games/{game_id}/join", headers=third_auth_headers)
+    client.post(f"/api/games/{game_id}/join", headers=fourth_auth_headers)
+    # 4/4 = full, teams assigned
+    full_resp = client.get(f"/api/games/{game_id}")
+    teams = [p["team"] for p in full_resp.json()["participants"]]
+    assert set(teams) == {"A", "B"}, f"Expected A/B teams when full, got {teams}"
+    # One leaves -> 3/4, everyone should be unassigned
+    client.post(f"/api/games/{game_id}/leave", headers=fourth_auth_headers)
+    after_resp = client.get(f"/api/games/{game_id}")
+    teams_after = [p["team"] for p in after_resp.json()["participants"]]
+    assert all(t == "unassigned" for t in teams_after), f"Expected all unassigned when incomplete, got {teams_after}"
+
+
 def test_creator_cannot_leave(client, auth_headers):
     create_resp = client.post("/api/games", headers=auth_headers, json={
         "game_type": "5v5",

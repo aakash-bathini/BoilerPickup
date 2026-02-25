@@ -41,6 +41,26 @@ def _migrate_add_email_verification():
 
 _migrate_add_email_verification()
 
+
+def _migrate_add_gender():
+    """Add gender column for NBA height mapping."""
+    if "sqlite" not in str(engine.url):
+        return
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN gender VARCHAR(10)"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        try:
+            conn.execute(text("ALTER TABLE pending_registrations ADD COLUMN gender VARCHAR(10)"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+
+_migrate_add_gender()
+
 app = FastAPI(
     title="Boiler Pickup API",
     description="AI-powered pickup basketball matchmaking for Purdue CoRec",

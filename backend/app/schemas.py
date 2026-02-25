@@ -17,6 +17,7 @@ class UserRegister(BaseModel):
     height: Optional[str] = None
     weight: Optional[int] = Field(None, ge=50, le=500)
     preferred_position: Optional[str] = None
+    gender: Optional[str] = Field(None, pattern=r"^(male|female|other)$")
     self_reported_skill: int = Field(..., ge=1, le=10)
 
     @field_validator("email")
@@ -68,6 +69,7 @@ class UserPublic(BaseModel):
     height: Optional[str] = None
     weight: Optional[int] = None
     preferred_position: Optional[str] = None
+    gender: Optional[str] = None
     self_reported_skill: int
     ai_skill_rating: float
     skill_confidence: float
@@ -93,6 +95,7 @@ class UserUpdate(BaseModel):
     height: Optional[str] = None
     weight: Optional[int] = Field(None, ge=50, le=500)
     preferred_position: Optional[str] = None
+    gender: Optional[str] = Field(None, pattern=r"^(male|female|other)$")
     bio: Optional[str] = None
 
     @field_validator("preferred_position")

@@ -23,6 +23,7 @@ GAME_TYPE_MAX_PLAYERS = {"5v5": 10, "3v3": 6, "2v2": 4}
 REVIEW_PERIOD_HOURS = 24
 STATS_DEADLINE_HOURS = 24
 UNFILLED_GAME_DELETE_MINUTES = 15  # Delete unfilled games 15 mins before scheduled time
+START_WINDOW_HOURS = 1  # Full games must be started within 1 hour of scheduled time or get deleted + strike
 
 
 def _add_strike(db: Session, user_id: int) -> None:
@@ -53,6 +54,21 @@ def _cleanup_unfilled_games(db: Session) -> None:
     db.commit()
 
 
+def _cleanup_expired_full_games(db: Session) -> None:
+    """Delete full games past scheduled_time + 1 hour (not started); add strike to creator."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=START_WINDOW_HOURS)
+    candidates = (
+        db.query(Game)
+        .filter(Game.status == "full", Game.scheduled_time < cutoff)
+        .all()
+    )
+    for game in candidates:
+        creator_id = game.creator_id
+        db.delete(game)
+        _add_strike(db, creator_id)
+    db.commit()
+
+
 def _cleanup_games_without_stats(db: Session) -> None:
     """Delete games with no stats 24h past scheduled_time; add strike to creator."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=STATS_DEADLINE_HOURS)
@@ -73,11 +89,20 @@ def _cleanup_games_without_stats(db: Session) -> None:
     db.commit()
 
 
-def _game_to_out(db: Session, game: Game) -> GameOut:
-    """Converts a Game model to a GameOut schema with enriched participant data and AI metrics."""
+def _game_to_out(db: Session, game: Game, skip_predict: bool = False) -> GameOut:
+    """Converts a Game model to a GameOut schema with enriched participant data and AI metrics.
+    skip_predict=True for list view to avoid 50+ model inferences.
+    Deduplicates by user_id to prevent 5/4 or duplicate-in-both-teams display bugs."""
+    seen_user_ids = set()
+    participants_deduped = []
+    for p in game.participants:
+        if p.user_id in seen_user_ids:
+            continue
+        seen_user_ids.add(p.user_id)
+        participants_deduped.append(p)
     # Enriched participants
     p_out = []
-    for p in game.participants:
+    for p in participants_deduped:
         po = GameParticipantOut.model_validate(p)
         u = p.user
         if u:
@@ -89,16 +114,16 @@ def _game_to_out(db: Session, game: Game) -> GameOut:
 
     # 1. Calculate prediction and betting lines
     from app.ai.win_predictor import predict_win_probability, calculate_betting_lines
-    team_a_parts = [p for p in game.participants if p.team == "A"]
-    team_b_parts = [p for p in game.participants if p.team == "B"]
+    team_a_parts = [p for p in participants_deduped if p.team == "A"]
+    team_b_parts = [p for p in participants_deduped if p.team == "B"]
     
     prob = None
     moneyline = None
     spread = None
     
-    # Prediction only valid if roster is full OR game is in progress
-    if (game.status in ("full", "in_progress", "completed") and 
-        len(game.participants) >= game.max_players and 
+    # Prediction only valid if roster is full OR game is in progress (skip for list view for speed)
+    if not skip_predict and (game.status in ("full", "in_progress", "completed") and 
+        len(participants_deduped) >= game.max_players and 
         team_a_parts and team_b_parts):
         try:
             prob = predict_win_probability(db, game, team_a_parts, team_b_parts)
@@ -110,6 +135,9 @@ def _game_to_out(db: Session, game: Game) -> GameOut:
             
     res = GameOut.model_validate(game)
     res.participants = p_out
+    # Ensure participant count never exceeds max_players for display
+    if len(p_out) > game.max_players:
+        res.participants = p_out[: game.max_players]
     res.creator_name = game.creator.display_name if game.creator else "Unknown"
     if game.scorekeeper:
         res.scorekeeper_name = game.scorekeeper.display_name
@@ -175,6 +203,7 @@ def list_games(
     blocked_ids = _get_blocked_ids(db, current_user.id)
 
     _cleanup_unfilled_games(db)
+    _cleanup_expired_full_games(db)
     _cleanup_games_without_stats(db)
 
     query = (
@@ -198,12 +227,13 @@ def list_games(
     query = query.filter(Game.skill_min <= user_skill + 1.0, Game.skill_max >= user_skill - 1.0)
 
     games = query.order_by(Game.scheduled_time.desc()).limit(50).all()
-    return [_game_to_out(db, g) for g in games]
+    return [_game_to_out(db, g, skip_predict=True) for g in games]
 
 
 @router.get("/{game_id}", response_model=GameOut)
 def get_game(game_id: int, db: Session = Depends(get_db)):
     _cleanup_unfilled_games(db)
+    _cleanup_expired_full_games(db)
     game = _load_game(db, game_id)
     if game and game.status == "in_progress":
         unassigned = [p for p in game.participants if (p.team or "").lower() not in ("a", "b")]
@@ -377,10 +407,22 @@ def leave_game(
         raise HTTPException(status_code=400, detail="You are not in this game")
 
     db.delete(participant)
+    db.flush()  # Ensure delete is applied before counting
     if game.status == "full":
         game.status = "open"
+    # When roster becomes incomplete, reset everyone to "joined" (unassigned) until full again
+    _reset_teams_if_incomplete(db, game_id, game.max_players)
     db.commit()
     return _game_to_out(db, _load_game(db, game_id))
+
+
+def _reset_teams_if_incomplete(db: Session, game_id: int, max_players: int) -> None:
+    """Reset all participants to unassigned when roster is not full."""
+    count = db.query(GameParticipant).filter(GameParticipant.game_id == game_id).count()
+    if count < max_players:
+        db.query(GameParticipant).filter(GameParticipant.game_id == game_id).update(
+            {GameParticipant.team: "unassigned"}, synchronize_session=False
+        )
 
 
 @router.post("/{game_id}/kick/{user_id}", response_model=GameOut)
@@ -409,8 +451,10 @@ def kick_player(
         raise HTTPException(status_code=404, detail="Player is not in this game")
 
     db.delete(participant)
+    db.flush()
     if game.status == "full":
         game.status = "open"
+    _reset_teams_if_incomplete(db, game_id, game.max_players)
     db.commit()
     return _game_to_out(db, _load_game(db, game_id))
 
@@ -429,6 +473,25 @@ def start_game(
     if game.status not in ("open", "full"):
         raise HTTPException(status_code=400, detail="Game cannot be started in its current state")
 
+    now = datetime.now(timezone.utc)
+    scheduled = game.scheduled_time.replace(tzinfo=timezone.utc) if game.scheduled_time else now
+    window_end = scheduled + timedelta(hours=START_WINDOW_HOURS)
+
+    if now < scheduled:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Game cannot be started yet. Scheduled for {scheduled.strftime('%b %d, %Y at %I:%M %p')}.",
+        )
+    if now > window_end:
+        creator_id = game.creator_id
+        db.delete(game)
+        _add_strike(db, creator_id)
+        db.commit()
+        raise HTTPException(
+            status_code=410,
+            detail="Game expired. It was not started within 1 hour of the scheduled time. A strike has been added.",
+        )
+
     participants = (
         db.query(GameParticipant)
         .options(joinedload(GameParticipant.user))
@@ -441,16 +504,17 @@ def start_game(
             detail=f"Need {game.max_players} players to start, currently have {len(participants)}",
         )
 
-    try:
-        from app.ai.matchmaking import assign_teams
-        assign_teams(db, game, participants)
-    except Exception:
-        _fallback_team_assignment(participants)
-
-    # Safety: ensure every participant has a team (model can fail for some player IDs)
+    # Teams already assigned when roster filled; ensure any stragglers get assigned
     unassigned = [p for p in participants if (p.team or "").lower() not in ("a", "b")]
     if unassigned:
-        _fallback_team_assignment(participants)
+        try:
+            from app.ai.matchmaking import assign_teams
+            assign_teams(db, game, participants)
+        except Exception:
+            _fallback_team_assignment(participants)
+        unassigned = [p for p in participants if (p.team or "").lower() not in ("a", "b")]
+        if unassigned:
+            _fallback_team_assignment(participants)
 
     game.status = "in_progress"
     db.commit()

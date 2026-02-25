@@ -62,14 +62,18 @@ def compute_confidence(total_games: int, rating_history: list[float] | None = No
 
 def get_learning_rate(total_games_before: int, current_confidence: float = 0.5) -> float:
     """
-    Dynamic learning rate scaling with uncertainty (Glicko-2 inspired).
-    Higher uncertainty (lower confidence) -> Higher learning rate.
+    Dynamic learning rate. Early games: higher LR to spread 1–10 quickly.
+    Veterans: more stable. Target: ratings reach full 1–10 range within ~25 games.
     """
-    K_max = 0.5
+    K_max = 0.45
     lr = K_max * (1.0 - current_confidence)
-    if total_games_before < 3:
-        lr = min(lr, 0.25)  # Cap early overreactions
-    return max(0.05, lr)
+    if total_games_before < 5:
+        lr = max(lr, 0.28)  # Strong updates for first few games
+    if total_games_before < 15:
+        lr = max(lr, 0.18)  # Keep spreading through early career
+    if total_games_before >= 40:
+        lr = max(0.05, lr * 0.65)  # Stable for veterans
+    return max(0.05, min(0.45, lr))
 
 
 def get_alpha(total_games_before: int, current_confidence: float = 0.5) -> float:
@@ -140,17 +144,13 @@ def compute_game_performance_rating(
     # We combine normalized PER and efficiency to get a base modifier before match context
     raw_performance = (normalized_per / max(base["scale"], 1.0)) * (1.0 + eff_bonus * 0.5)
     
-    # 5. Math Mapping -> [0.0, 10.0] scale
-    # We remove the "forcing to center" logic and use a more linear performance interpretor.
-    # An average pickup performance (hitting baselines) is ~7.5 after scaling.
-    # We map 0.0 performance to 0.0 rating and 15.0+ performance to 10.0 rating.
-    perf_rating = (raw_performance / 15.0) * 10.0
-    
-    # Apply a slight soft-cap on the ends to prevent extreme outliers from breaking the 1-10 range
-    if perf_rating > 9.0:
-        perf_rating = 9.0 + (perf_rating - 9.0) * 0.1 # Diminishing returns after 9.0
-    elif perf_rating < 1.0:
-        perf_rating = 1.0 - (1.0 - perf_rating) * 0.2 # Slower drop at the very bottom
+    # 5. Map to [1.0, 10.0] — games to 15, amateur pickup. Very good players can reach ~9–10.
+    # Average performance (baselines) -> ~5.0. Elite performance -> 9+.
+    perf_rating = 1.0 + (raw_performance / 12.0) * 9.0
+    if perf_rating > 9.5:
+        perf_rating = 9.5 + (perf_rating - 9.5) * 0.15
+    elif perf_rating < 1.5:
+        perf_rating = 1.5 - (1.5 - perf_rating) * 0.3
 
     # 6. Apply Match Context (Score Margin & Opponent Strength)
     # This is the true Elo component: performance relative to competition.
@@ -239,10 +239,15 @@ def update_ratings_after_game(
             )
         else:
             expected_win = 1.0 / (1.0 + 10.0 ** ((avg_opp - old_rating) / 4.0))
+            k = 1.2
+            if won and avg_opp > old_rating:
+                k = 1.6  # Upset bonus: beat someone better
+            elif not won and avg_opp < old_rating:
+                k = 1.4  # Loss to worse opponent: larger penalty
             if won:
-                game_rating = old_rating + 1.5 * (1.0 - expected_win)
+                game_rating = old_rating + k * (1.0 - expected_win)
             else:
-                game_rating = old_rating - 1.5 * expected_win
+                game_rating = old_rating - k * expected_win
             game_rating = min(max(game_rating, 1.0), 10.0)
 
         alpha = get_alpha(total_before, user.skill_confidence)

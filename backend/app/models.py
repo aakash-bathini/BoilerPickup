@@ -21,6 +21,7 @@ class User(Base):
     height = Column(String(10), nullable=True)
     weight = Column(Integer, nullable=True)
     preferred_position = Column(String(2), nullable=True)
+    gender = Column(String(10), nullable=True)  # male, female, other — for NBA height mapping
     self_reported_skill = Column(Integer, nullable=False, default=5)
     ai_skill_rating = Column(Float, nullable=False, default=5.0)
     skill_confidence = Column(Float, nullable=False, default=0.1)
@@ -195,6 +196,7 @@ class PendingRegistration(Base):
     height = Column(String(10), nullable=True)
     weight = Column(Integer, nullable=True)
     preferred_position = Column(String(2), nullable=True)
+    gender = Column(String(10), nullable=True)
     self_reported_skill = Column(Integer, nullable=False, default=5)
     verification_code = Column(String(6), nullable=False)
     verification_code_expires = Column(DateTime, nullable=False)

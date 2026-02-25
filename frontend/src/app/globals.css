@@ -18,6 +18,17 @@
   box-sizing: border-box;
 }
 
+/* Graphics acceleration: promote animated elements to GPU layer for smoother transitions */
+.animate-slide-up,
+.animate-fade-in,
+.animate-scale-in,
+.animate-slide-up-fade,
+.animate-message-in {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
 html {
   scroll-behavior: smooth;
 }

@@ -784,12 +784,12 @@ async def coach_pete_chat(
         try:
             import google.generativeai as genai
             genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-1.5-pro")
+            model = genai.GenerativeModel("gemini-1.5-flash")
             response = model.generate_content(
                 [system_prompt, data.message],
                 generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=600,
-                    temperature=0.5,  # Lower = more deterministic, less random
+                    max_output_tokens=400,
+                    temperature=0.4,
                     top_p=0.9,
                     top_k=40,
                 ),

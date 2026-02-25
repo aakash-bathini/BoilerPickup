@@ -17,8 +17,8 @@ export default function CreateGamePage() {
   const [gameType, setGameType] = useState('5v5');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
-  const [skillMin, setSkillMin] = useState(1);
-  const [skillMax, setSkillMax] = useState(10);
+  const [skillMin, setSkillMin] = useState(5);
+  const [skillMax, setSkillMax] = useState(9);
   const [courtType, setCourtType] = useState('fullcourt');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -106,26 +106,26 @@ export default function CreateGamePage() {
             <div className="mt-3 flex items-center gap-2 text-sm bg-blue-500/5 border border-blue-500/10 rounded-lg px-3 py-2">
               <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
               <span className="text-gray-400">
-                {String(dateWeather.description)} · {String(dateWeather.high)}°/{String(dateWeather.low)}°F · {String(dateWeather.precip_chance)}% rain
+                {String(dateWeather.description)} · {String(dateWeather.high)}°F / {String(dateWeather.low)}°F · {String(dateWeather.precip_chance)}% rain
               </span>
             </div>
           )}
         </div>
 
         <div className="glass-card p-6">
-          <label className="label-text mb-3 block">Skill Range ({skillMin} - {skillMax})</label>
+          <label className="label-text mb-3 block">Skill Range ({Number(skillMin).toFixed(1)} - {Number(skillMax).toFixed(1)})</label>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Minimum</label>
-              <input type="number" min={1} max={10} value={skillMin} onChange={e => setSkillMin(Number(e.target.value))} className="input-field" />
+              <input type="number" min={1} max={10} step={0.1} value={skillMin} onChange={e => setSkillMin(Number(e.target.value))} className="input-field" />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Maximum</label>
-              <input type="number" min={1} max={10} value={skillMax} onChange={e => setSkillMax(Number(e.target.value))} className="input-field" />
+              <input type="number" min={1} max={10} step={0.1} value={skillMax} onChange={e => setSkillMax(Number(e.target.value))} className="input-field" />
             </div>
           </div>
           <div className="mt-2 h-2 bg-dark-300 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-gold-500/60 to-gold-400" style={{ marginLeft: `${(skillMin - 1) * 11.1}%`, width: `${(skillMax - skillMin + 1) * 11.1}%` }} />
+            <div className="h-full bg-gradient-to-r from-gold-500/60 to-gold-400" style={{ marginLeft: `${((skillMin - 1) / 9) * 100}%`, width: `${((skillMax - skillMin) / 9) * 100}%` }} />
           </div>
         </div>
 

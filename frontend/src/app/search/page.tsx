@@ -156,7 +156,7 @@ function SearchContent() {
           {results.map((p, i) => (
             <Link key={p.id} href={`/profile/${p.id}`}
               className="glass-card-hover p-4 flex items-center justify-between animate-slide-up block"
-              style={{ animationDelay: `${i * 0.03}s` }}>
+              style={{ animationDelay: `${Math.min(i * 0.02, 0.3)}s` }}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-400 text-sm font-bold">
                   {p.display_name.charAt(0)}

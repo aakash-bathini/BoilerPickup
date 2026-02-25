@@ -14,7 +14,7 @@ export default function ProfilePage() {
   const [statsByType, setStatsByType] = useState<CareerStatsByType | null>(null);
   const [skillHistory, setSkillHistory] = useState<SkillHistoryEntry[]>([]);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ display_name: '', height: '', weight: '', preferred_position: '', bio: '' });
+  const [form, setForm] = useState({ display_name: '', height: '', weight: '', preferred_position: '', gender: '', bio: '' });
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
@@ -33,7 +33,7 @@ export default function ProfilePage() {
     setForm({
       display_name: user.display_name, height: user.height || '',
       weight: user.weight ? String(user.weight) : '', preferred_position: user.preferred_position || '',
-      bio: user.bio || '',
+      gender: (user as { gender?: string }).gender || '', bio: user.bio || '',
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -45,6 +45,7 @@ export default function ProfilePage() {
         height: form.height || undefined,
         weight: form.weight ? Number(form.weight) : undefined,
         preferred_position: form.preferred_position || undefined,
+        gender: form.gender || undefined,
         bio: form.bio || undefined,
       } as Partial<typeof user & Record<string, unknown>>);
       setEditing(false);
@@ -91,6 +92,14 @@ export default function ProfilePage() {
                 <select value={form.preferred_position} onChange={e => setForm(f => ({ ...f, preferred_position: e.target.value }))} className="input-field">
                   <option value="">Any</option>
                   {['PG', 'SG', 'SF', 'PF', 'C'].map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div><label className="label-text">Gender</label>
+                <select value={form.gender} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))} className="input-field">
+                  <option value="">Prefer not to say</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
               <div><label className="label-text">Height</label><input value={form.height} onChange={e => setForm(f => ({ ...f, height: e.target.value }))} className="input-field" placeholder={`6'2"`} /></div>

@@ -13,6 +13,12 @@ const POSITIONS = [
   { value: 'C', label: 'Center' },
 ];
 
+const GENDERS = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'other', label: 'Other / Prefer not to say' },
+];
+
 const SKILL_LABELS: Record<number, string> = {
   1: 'Beginner', 2: 'Novice', 3: 'Learning', 4: 'Intermediate',
   5: 'Average', 6: 'Above Average', 7: 'Good', 8: 'Great', 9: 'Elite', 10: 'Pro',
@@ -27,7 +33,7 @@ export default function RegisterPage() {
   const [code, setCode] = useState('');
   const [form, setForm] = useState({
     email: '', username: '', password: '', confirmPassword: '',
-    display_name: '', height: '', weight: '', preferred_position: '',
+    display_name: '', height: '', weight: '', preferred_position: '', gender: '',
     self_reported_skill: 5,
   });
 
@@ -72,6 +78,7 @@ export default function RegisterPage() {
         height: form.height || undefined,
         weight: form.weight ? Number(form.weight) : undefined,
         preferred_position: form.preferred_position || undefined,
+        gender: form.gender || undefined,
         self_reported_skill: form.self_reported_skill,
       });
       if (form.email.toLowerCase().endsWith('@purdoo.com')) {
@@ -190,6 +197,13 @@ export default function RegisterPage() {
                   <input type="number" value={form.weight} onChange={e => update('weight', e.target.value)}
                     placeholder="180" className="input-field" />
                 </div>
+              </div>
+              <div>
+                <label className="label-text">Gender</label>
+                <select value={form.gender} onChange={e => update('gender', e.target.value)} className="input-field">
+                  <option value="">Prefer not to say</option>
+                  {GENDERS.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                </select>
               </div>
               <div>
                 <label className="label-text">Preferred Position</label>

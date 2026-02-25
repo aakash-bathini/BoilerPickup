@@ -134,7 +134,7 @@ export default function DashboardPage() {
               </div>
               {weather && (
                 <div className="flex flex-col items-center justify-center px-6 py-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 shadow-lg">
-                  <div className="text-3xl font-bold text-emerald-400">{String(weather.temperature)}°</div>
+                  <div className="text-3xl font-bold text-emerald-400">{String(weather.temperature)}°F</div>
                   <div className="text-xs text-emerald-200/60 uppercase tracking-widest mt-1 font-bold">West Lafayette</div>
                 </div>
               )}

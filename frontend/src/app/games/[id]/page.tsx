@@ -62,17 +62,25 @@ export default function GameDetailPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const justSentRef = useRef(false);
   useEffect(() => {
-    chatEnd.current?.scrollIntoView({ behavior: 'smooth' });
+    if (justSentRef.current) {
+      justSentRef.current = false;
+      chatEnd.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   useEffect(() => {
     if (!game) return;
     const interval = setInterval(() => {
+      api.getGame(gameId).then(g => {
+        setGame(g);
+        if (g.status === 'open' || g.status === 'full') refreshAuth();
+      }).catch(() => {});
       const isP = game.participants.some(p => p.user_id === user?.id);
       const isSK = game.scorekeeper_id === user?.id;
       if (isP || isSK) api.getGameMessages(gameId).then(setMessages).catch(() => {});
-    }, 5000);
+    }, 4000);
     return () => clearInterval(interval);
   }, [game, gameId, user?.id]);
 
@@ -85,7 +93,11 @@ export default function GameDetailPage() {
   const isParticipant = game.participants.some(p => p.user_id === user.id);
   const canJoin = game.status === 'open' && !isParticipant;
   const canLeave = (game.status === 'open' || game.status === 'full') && isParticipant && !isCreator;
-  const canStart = isCreator && (game.status === 'open' || game.status === 'full') && game.participants.length >= game.max_players;
+  const now = new Date();
+  const scheduled = new Date(game.scheduled_time);
+  const windowEnd = new Date(scheduled.getTime() + 60 * 60 * 1000);
+  const canStart = isCreator && (game.status === 'open' || game.status === 'full') && game.participants.length >= game.max_players
+    && now >= scheduled && now < windowEnd;
   const canComplete = (isCreator || isSK) && game.status === 'in_progress';
   const canSubmitStats = (isCreator || isSK) && (game.status === 'in_progress' || game.status === 'completed') && !game.stats_finalized;
   const canDelete = isCreator && (game.status === 'open' || game.status === 'full') && game.participants.length <= 1;
@@ -112,6 +124,7 @@ export default function GameDetailPage() {
     try {
       await api.sendMessage({ game_id: gameId, content: msgInput });
       setMsgInput('');
+      justSentRef.current = true;
       const msgs = await api.getGameMessages(gameId);
       setMessages(msgs);
     } catch { /* ignore */ }
@@ -160,13 +173,13 @@ export default function GameDetailPage() {
         </div>
         <div className="text-sm text-gray-400 mb-2">{formatEST(game.scheduled_time)}</div>
         <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-          <span>Skill: {game.skill_min.toFixed(0)}-{game.skill_max.toFixed(0)}</span>
+          <span>Skill: {game.skill_min.toFixed(1)}-{game.skill_max.toFixed(1)}</span>
           <span>Players: {game.participants.length}/{game.max_players}</span>
           {game.creator_name && <span>Created by {game.creator_name}</span>}
         </div>
         {game.notes && <p className="mt-3 text-sm text-gray-400 bg-dark-300/50 rounded-lg p-3">{game.notes}</p>}
 
-        {(game.status === 'full' || game.status === 'in_progress') && game.win_prediction != null && (
+        {(game.status === 'full' || game.status === 'in_progress' || game.status === 'completed') && game.win_prediction != null && (
           <div className="mt-4 flex items-center justify-center gap-4 py-3 px-4 bg-gold-500/5 border border-gold-500/20 rounded-xl">
             <span className="text-xs text-gray-500 uppercase tracking-wider">Win predictor</span>
             <div className="flex items-center gap-3">
@@ -324,10 +337,12 @@ export default function GameDetailPage() {
           <h2 className="text-lg font-semibold text-white mb-3">
             {game.status === 'open' || game.status === 'full' ? 'Players' : 'Roster'}
           </h2>
-          {unassigned.length > 0 && (
+          {((game.status === 'open' || game.status === 'full') && (game.participants.length < game.max_players || unassigned.length > 0) ? (game.participants.length < game.max_players ? game.participants : unassigned) : unassigned).length > 0 && (
             <div className="glass-card p-4 mb-3">
-              <div className="text-xs text-gray-500 mb-2 uppercase tracking-wider">{game.status === 'in_progress' || game.status === 'completed' ? 'Unassigned' : 'Joined Players'}</div>
-              {unassigned.map(p => (
+              <div className="text-xs text-gray-500 mb-2 uppercase tracking-wider">
+                {(game.status === 'open' || game.status === 'full') && (game.participants.length < game.max_players || unassigned.length > 0) ? 'Joined Players' : 'Unassigned'}
+              </div>
+              {((game.status === 'open' || game.status === 'full') && (game.participants.length < game.max_players || unassigned.length > 0) ? (game.participants.length < game.max_players ? game.participants : unassigned) : unassigned).map(p => (
                 <div key={p.id} className="flex items-center justify-between py-2 border-b border-gold-500/5 last:border-0">
                   <Link href={`/profile/${p.user_id}`} className="flex items-center gap-2 hover:text-gold-400 transition-colors">
                     <div className="w-7 h-7 rounded-full bg-gold-500/10 flex items-center justify-center text-xs font-bold text-gold-400">{p.display_name?.charAt(0)}</div>
@@ -343,7 +358,7 @@ export default function GameDetailPage() {
               ))}
             </div>
           )}
-          {teamA.length > 0 && (
+          {teamA.length > 0 && (game.status === 'full' && game.participants.length >= game.max_players || game.status === 'in_progress' || game.status === 'completed') && (
             <div className="glass-card p-4 mb-3">
               <div className="text-xs text-gray-500 mb-2 uppercase tracking-wider">Team A {game.team_a_score !== null && `— ${game.team_a_score} pts`}</div>
               {teamA.map(p => (
@@ -358,7 +373,7 @@ export default function GameDetailPage() {
               ))}
             </div>
           )}
-          {teamB.length > 0 && (
+          {teamB.length > 0 && (game.status === 'full' && game.participants.length >= game.max_players || game.status === 'in_progress' || game.status === 'completed') && (
             <div className="glass-card p-4">
               <div className="text-xs text-gray-500 mb-2 uppercase tracking-wider">Team B {game.team_b_score !== null && `— ${game.team_b_score} pts`}</div>
               {teamB.map(p => (

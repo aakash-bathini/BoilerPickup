@@ -121,7 +121,7 @@ export default function LandingPage() {
             transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
             className="hidden lg:block relative"
           >
-            <div className="absolute inset-0 bg-gold-500/20 blur-[100px] rounded-full" />
+            <div className="absolute inset-0 bg-gold-500/20 blur-[60px] rounded-full" />
             <div className="relative bg-[#050505] p-6 rounded-[2rem] border border-white/10 backdrop-blur-xl shadow-2xl skew-y-[-2deg] transform-gpu">
               <div className="w-[450px] h-[300px] mb-8 relative z-10">
                 <SkillRatingChart data={MOCK_CHART_DATA} />
