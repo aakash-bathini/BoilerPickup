@@ -87,16 +87,19 @@ def _game_to_out(db: Session, game: Game) -> GameOut:
         ))
 
     win_prediction = None
-    if game.status in ("full", "in_progress") and len(game.participants) >= game.max_players:
+    # Only show win prediction when roster is full AND everyone is assigned to A or B
+    team_a = [p for p in game.participants if p.team == "A"]
+    team_b = [p for p in game.participants if p.team == "B"]
+    unassigned = [p for p in game.participants if (p.team or "").lower() not in ("a", "b")]
+    if (
+        game.status in ("full", "in_progress")
+        and len(game.participants) >= game.max_players
+        and team_a
+        and team_b
+        and not unassigned
+    ):
         try:
             from app.ai.win_predictor import predict_win_probability
-            from app.ai.matchmaking import get_preview_split
-            team_a = [p for p in game.participants if p.team == "A"]
-            team_b = [p for p in game.participants if p.team == "B"]
-            unassigned = [p for p in game.participants if (p.team or "").lower() not in ("a", "b")]
-            # Use balanced preview split when teams are uneven or anyone is unassigned
-            if not team_a or not team_b or unassigned:
-                team_a, team_b = get_preview_split(game.participants)
             win_prediction = round(predict_win_probability(db, game, team_a, team_b), 2)
         except Exception:
             pass
@@ -211,6 +214,18 @@ def list_games(
 def get_game(game_id: int, db: Session = Depends(get_db)):
     _cleanup_unfilled_games(db)
     game = _load_game(db, game_id)
+    if game and game.status == "in_progress":
+        unassigned = [p for p in game.participants if (p.team or "").lower() not in ("a", "b")]
+        if unassigned:
+            participants = (
+                db.query(GameParticipant)
+                .options(joinedload(GameParticipant.user))
+                .filter(GameParticipant.game_id == game_id)
+                .all()
+            )
+            _fallback_team_assignment(participants)
+            db.commit()
+            game = _load_game(db, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     return _game_to_out(db, game)
@@ -325,10 +340,24 @@ def join_game(
 
     participant = GameParticipant(user_id=current_user.id, game_id=game_id, team="unassigned")
     db.add(participant)
+    db.flush()
 
-    current_count = db.query(GameParticipant).filter(GameParticipant.game_id == game_id).count()
-    if current_count + 1 >= game.max_players:
+    participants = (
+        db.query(GameParticipant)
+        .options(joinedload(GameParticipant.user))
+        .filter(GameParticipant.game_id == game_id)
+        .all()
+    )
+    if len(participants) >= game.max_players:
         game.status = "full"
+        try:
+            from app.ai.matchmaking import assign_teams
+            assign_teams(db, game, participants)
+        except Exception:
+            _fallback_team_assignment(participants)
+        unassigned = [p for p in participants if (p.team or "").lower() not in ("a", "b")]
+        if unassigned:
+            _fallback_team_assignment(participants)
 
     db.commit()
     return _game_to_out(db, _load_game(db, game_id))

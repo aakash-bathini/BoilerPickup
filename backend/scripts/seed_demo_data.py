@@ -210,6 +210,13 @@ def create_completed_game(db, users: list[User], game_type: str, creator: User) 
     team_b = chosen[n_per_team:]
 
     scheduled = _utcnow() - timedelta(days=random.randint(1, 90))
+    # Pickup: game to 15. Winner = 15, loser = 0–14 (8–14 for closer games)
+    winner_score = 15
+    loser_score = random.randint(8, 14) if random.random() > 0.2 else random.randint(0, 7)
+    if random.random() > 0.5:
+        team_a_score, team_b_score = winner_score, loser_score
+    else:
+        team_a_score, team_b_score = loser_score, winner_score
     game = Game(
         creator_id=creator.id,
         game_type=game_type,
@@ -217,14 +224,12 @@ def create_completed_game(db, users: list[User], game_type: str, creator: User) 
         skill_min=skill_min,
         skill_max=skill_max,
         status="completed",
-        team_a_score=random.randint(10, 21),
-        team_b_score=random.randint(8, 19),
+        team_a_score=team_a_score,
+        team_b_score=team_b_score,
         completed_at=scheduled + timedelta(hours=1),
         stats_finalized=True,
         stats_finalized_at=scheduled + timedelta(hours=1),
     )
-    if game.team_a_score == game.team_b_score:
-        game.team_a_score += 1
     db.add(game)
     db.flush()
 
@@ -270,11 +275,13 @@ def create_completed_game(db, users: list[User], game_type: str, creator: User) 
 
 
 def create_challenge(db, u1: User, u2: User) -> Challenge | None:
-    """Create a completed 1v1 challenge."""
+    """Create a completed 1v1 challenge (pickup: game to 15)."""
     if u1.id == u2.id:
         return None
-    score_a = random.randint(10, 15)
-    score_b = random.randint(8, 14)
+    winner_score = 15
+    loser_score = random.randint(8, 14) if random.random() > 0.2 else random.randint(0, 7)
+    score_a = winner_score if random.random() > 0.5 else loser_score
+    score_b = loser_score if score_a == winner_score else winner_score
     if score_a == score_b:
         score_a += 1
     winner = u1 if score_a > score_b else u2

@@ -171,11 +171,11 @@ export default function GameDetailPage() {
             <span className="text-xs text-gray-500 uppercase tracking-wider">Win predictor</span>
             <div className="flex items-center gap-3">
               <span className={`text-sm font-bold ${game.win_prediction >= 0.5 ? 'text-gold-400' : 'text-gray-400'}`}>
-                Team A {(game.win_prediction * 100).toFixed(0)}%
+                Team A {Math.min(100, Math.max(0, game.win_prediction * 100)).toFixed(0)}%
               </span>
               <span className="text-gray-600">—</span>
               <span className={`text-sm font-bold ${game.win_prediction < 0.5 ? 'text-gold-400' : 'text-gray-400'}`}>
-                Team B {((1 - game.win_prediction) * 100).toFixed(0)}%
+                Team B {Math.min(100, Math.max(0, (1 - game.win_prediction) * 100)).toFixed(0)}%
               </span>
             </div>
             <span className="text-[10px] text-gray-600">ML model · skill, height, stats, wins</span>

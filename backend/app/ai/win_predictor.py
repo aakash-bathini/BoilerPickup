@@ -75,7 +75,7 @@ def _build_feature_vector(db: Session, team_a: list, team_b: list, game_type: st
 
 
 def predict_win_probability(db: Session, game: Game, team_a: list, team_b: list) -> float:
-    """P(Team A wins). Gradient Boosting when trained; else Elo fallback."""
+    """P(Team A wins). Gradient Boosting when trained; else Elo fallback. Always 0–1."""
     if not team_a or not team_b:
         return 0.5
     fa = _team_features(db, team_a, game.game_type)
@@ -89,10 +89,11 @@ def predict_win_probability(db: Session, game: Game, team_a: list, team_b: list)
                 model = pickle.load(f)
             X = np.array([_build_feature_vector(db, team_a, team_b, game.game_type)])
             prob = float(model.predict_proba(X)[0][1])
-            return 0.7 * prob + 0.3 * elo_prob
+            raw = 0.7 * prob + 0.3 * elo_prob
+            return max(0.0, min(1.0, raw))
         except Exception:
             pass
-    return elo_prob
+    return max(0.0, min(1.0, elo_prob))
 
 
 def train_on_games(db: Session, min_games: int = 20) -> dict:
